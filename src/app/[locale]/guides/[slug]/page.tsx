@@ -157,10 +157,10 @@ export default async function PricingGuidePage({
                       </TableCell>
                     </TableRow>
                   )}
-                  {models.map((model) => (
+                  {models.map((model, index) => (
                     <TableRow key={model.slug}>
                       <TableCell className="font-medium">
-                        <Link href={`/${locale}/models/${model.slug}`} className="text-blue-600 hover:underline">
+                        <Link href={`/${locale}/models/${model.slug}`} data-position={index + 1} className="text-blue-600 hover:underline">
                           {model.name}
                         </Link>
                       </TableCell>
