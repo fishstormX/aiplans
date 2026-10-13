@@ -126,6 +126,8 @@ export interface OpenRouterFloorSeed {
  * Cheapest OpenRouter host per model, checked 2026-10-13 SGT via
  * GET https://openrouter.ai/api/v1/models/{id}/endpoints
  */
+// Nemotron 3 Super / 3.5 Lightning removed 2026-10-13: no nemotron model exists in
+// production `models`; whether to catalog them is a separate decision.
 export const OPENROUTER_FLOOR_PRICES: OpenRouterFloorSeed[] = [
   {
     openRouterId: 'openai/gpt-oss-120b',
@@ -179,39 +181,6 @@ export const OPENROUTER_FLOOR_PRICES: OpenRouterFloorSeed[] = [
     outputPer1m: 0.22,
     floorProvider: 'Darkbloom',
     sourceUrl: 'https://openrouter.ai/google/gemma-4-26b-a4b-it',
-    verified: true,
-  },
-  {
-    openRouterId: 'nvidia/nemotron-3-super-120b-a12b',
-    modelSlugCandidates: [
-      'nvidia-nemotron-3-super-120b-a12b',
-      'nemotron-3-super-120b-a12b',
-      'nemotron-3-super',
-    ],
-    displayName: 'Nemotron 3 Super',
-    // Lowest input is DekaLLM $0.08/$0.45 (matches OpenRouter models API
-    // headline). DeepInfra $0.085/$0.40 is cheaper on 3:1 blended — noted, not used as floor.
-    inputPer1m: 0.08,
-    outputPer1m: 0.45,
-    floorProvider: 'DekaLLM',
-    alsoSeen: [
-      { provider: 'DeepInfra', inputPer1m: 0.085, outputPer1m: 0.4, note: 'cheaper 3:1 blended; not lowest input' },
-    ],
-    sourceUrl: 'https://openrouter.ai/nvidia/nemotron-3-super-120b-a12b',
-    verified: true,
-  },
-  {
-    openRouterId: 'nvidia/nemotron-3.5-lightning',
-    modelSlugCandidates: [
-      'nvidia-nemotron-3-5-lightning',
-      'nvidia-nemotron-3.5-lightning',
-      'nemotron-3.5-lightning',
-    ],
-    displayName: 'Nemotron 3.5 Lightning',
-    inputPer1m: 0.025,
-    outputPer1m: 0.12,
-    floorProvider: 'Darkbloom',
-    sourceUrl: 'https://openrouter.ai/nvidia/nemotron-3.5-lightning',
     verified: true,
   },
 ];

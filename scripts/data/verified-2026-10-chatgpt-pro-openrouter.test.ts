@@ -44,11 +44,8 @@ test('OpenRouter floors match verified official endpoints', () => {
   assert.equal(byId['qwen/qwen3.6-35b-a3b'].outputPer1m, 0.7);
   assert.equal(byId['google/gemma-4-26b-a4b-it'].inputPer1m, 0.042);
   assert.equal(byId['google/gemma-4-26b-a4b-it'].outputPer1m, 0.22);
-  assert.equal(byId['nvidia/nemotron-3-super-120b-a12b'].inputPer1m, 0.08);
-  assert.equal(byId['nvidia/nemotron-3-super-120b-a12b'].outputPer1m, 0.45);
-  assert.equal(byId['nvidia/nemotron-3.5-lightning'].inputPer1m, 0.025);
-  assert.equal(byId['nvidia/nemotron-3.5-lightning'].outputPer1m, 0.12);
-  assert.equal(OPENROUTER_FLOOR_PRICES.length, 6);
+  assert.equal(OPENROUTER_FLOOR_PRICES.length, 4);
+  assert.ok(!OPENROUTER_FLOOR_PRICES.some((f) => f.openRouterId.includes('nemotron')));
   for (const r of OPENROUTER_FLOOR_PRICES) {
     assert.ok(r.verified);
     assert.ok(r.sourceUrl.startsWith('https://openrouter.ai/'));
