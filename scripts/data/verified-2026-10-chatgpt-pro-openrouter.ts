@@ -19,6 +19,9 @@ const PRO_SRC_PRICING = 'https://openai.com/chatgpt/pricing/';
 /** Marker so future scrapers/seeds can find the single-slug Pro row we supersede. */
 export const CHATGPT_PRO_SUPERSEDED_MARKER = '[aiplans:superseded-by chatgpt-pro-100,chatgpt-pro-200,chatgpt-pro-500 2026-10-13]';
 
+export const CHATGPT_PRO_3P_NOTE =
+  'ChatGPT Pro covers OpenAI models only; models from other providers are not offered or included.';
+
 const GPT_PRO_SELECTOR = {
   families: ['gpt-5', 'gpt-5.5', 'gpt-5.6', 'gpt-4o', 'gpt-4.1'],
   extra: ['gpt-6.1-sol', 'gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna'],
@@ -33,6 +36,18 @@ function chatgptPro(
   extraNotes: string[],
 ): SubscriptionSeed {
   return {
+    annualPrice: null, // Help Center: "Pro is billed monthly. Annual billing ... not available."
+    currency: 'USD',
+    priceUnit: 'per_month',
+    region: 'global',
+    accessFromChina: false,
+    isOfficial: true,
+    billingGranularity: 'flat_monthly',
+    verifiedAt: VERIFIED_AT_ISO,
+    // ChatGPT Pro only serves OpenAI models; no other provider's model usage is
+    // paid for by the allowance (openai.com/chatgpt/pricing lists OpenAI models only).
+    thirdPartyCoverage: 'none',
+    thirdPartyCoverageNote: CHATGPT_PRO_3P_NOTE,
     providerSlug: 'openai',
     slug,
     name,
@@ -43,7 +58,10 @@ function chatgptPro(
     planCategory: 'chatbot',
     planLine: 'chatgpt',
     modelSlugs: [],
-    modelSelector: { ...GPT_PRO_SELECTOR },
+    modelSelector: { ...GPT_PRO_SELECTOR } as unknown as SubscriptionSeed['modelSelector'],
+    // OpenAI publishes no absolute per-tier numbers (only "Pro 200 includes more
+    // usage than Pro 100; Pro 500 offers the highest"), so no structured quota is
+    // invented. Relative allowance + multipliers live in quotaNote/noteLines.
     quotas: [],
     features: [
       'Pro models, Codex, deep research, image creation, memory and file uploads',

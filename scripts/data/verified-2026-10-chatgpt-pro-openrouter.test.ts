@@ -55,3 +55,15 @@ test('OpenRouter floors match verified official endpoints', () => {
     assert.ok(r.modelSlugCandidates.length >= 1);
   }
 });
+
+test('ChatGPT Pro tiers carry full verified fields and third-party coverage none', () => {
+  for (const plan of CHATGPT_PRO_PLANS) {
+    assert.equal(plan.thirdPartyCoverage, 'none');
+    assert.ok(plan.thirdPartyCoverageNote);
+    assert.equal(plan.currency, 'USD');
+    assert.equal(plan.priceUnit, 'per_month');
+    assert.equal(plan.annualPrice, null);
+    // OpenAI publishes no absolute per-tier numbers; keep quotas empty rather than invent them.
+    assert.deepEqual(plan.quotas, []);
+  }
+});
