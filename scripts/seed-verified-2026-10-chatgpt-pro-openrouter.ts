@@ -83,6 +83,7 @@ async function plan() {
   if (openrouter) {
     console.log('\nOpenRouter floor prices');
     for (const floor of OPENROUTER_FLOOR_PRICES) {
+      if (floor.cachedInputPer1m != null && floor.cachedInputPer1m > floor.inputPer1m) errors.push(`${floor.openRouterId}: cached ${floor.cachedInputPer1m} > input ${floor.inputPer1m}`);
       const model = await resolveModel(floor.modelSlugCandidates);
       if (!model) {
         errors.push(`model not found for ${floor.openRouterId} (candidates: ${floor.modelSlugCandidates.join(', ')})`);
@@ -92,7 +93,7 @@ async function plan() {
       const [row] = await sql<Id[]>`
         SELECT id FROM api_channel_prices WHERE model_id = ${model.id} AND provider_id = ${openrouter.id} ORDER BY id LIMIT 1`;
       floors.push({ floor, modelId: model.id, modelSlug: model.slug, existingId: row?.id ?? null });
-      console.log(`  ${row ? '↻' : '➕'} openrouter/${model.slug}: in $${floor.inputPer1m} / out $${floor.outputPer1m} (floor ${floor.floorProvider})`);
+      console.log(`  ${row ? '↻' : '➕'} openrouter/${model.slug}: in $${floor.inputPer1m} / cached ${floor.cachedInputPer1m == null ? 'NULL' : `$${floor.cachedInputPer1m}`} / out $${floor.outputPer1m} (floor ${floor.floorProvider})`);
     }
   }
   return { openai, openrouter, plans, legacy, floors };
@@ -144,6 +145,8 @@ async function main() {
       const row = {
         model_id: step.modelId, provider_id: p.openrouter!.id,
         input_price_per_1m: step.floor.inputPer1m, output_price_per_1m: step.floor.outputPer1m,
+        // Always written (NULL when unverified) so a stale cached price cannot outlive the floor change.
+        cached_input_price_per_1m: step.floor.cachedInputPer1m,
         currency: 'USD', price_unit: 'per_1m_tokens', is_available: true,
         notes: floorNotes(step.floor), last_verified: VERIFIED_AT, updated_at: NOW,
       };

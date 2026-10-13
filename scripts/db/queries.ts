@@ -1,3 +1,4 @@
+import { checkModelIdentity, ModelIdentityRejectedError, isCachedPriceSane } from '../utils/model-identity-guard';
 import { databaseSql, postgresAdmin } from './postgres-admin';
 import type { JSONValue } from 'postgres';
 
@@ -20,7 +21,7 @@ export async function upsertChannelPriceVariant(data: {
   source_url?: string;
   input_price_per_1m: number;
   output_price_per_1m: number;
-  cached_input_price_per_1m?: number;
+  cached_input_price_per_1m?: number | null;
   cache_create_price_per_1m?: number;
   currency?: string;
   price_unit?: string;
@@ -54,6 +55,12 @@ export async function upsertChannelPriceVariant(data: {
     throw new Error(
       `upsertChannelPriceVariant: output (${data.output_price_per_1m}) < input (${data.input_price_per_1m}) for variant ${data.variant_key}`
     );
+  }
+
+  if (!isCachedPriceSane(data.input_price_per_1m, data.cached_input_price_per_1m)) {
+    // Cached input can never cost more than uncached input; drop it rather than publish it.
+    console.warn(`upsertChannelPriceVariant: cached input (${data.cached_input_price_per_1m}) > input (${data.input_price_per_1m}) for variant ${data.variant_key}` + ' — cached price dropped (NULL)');
+    data = { ...data, cached_input_price_per_1m: null };
   }
 
   if (data.is_headline) {
@@ -137,6 +144,10 @@ export async function batchUpsertChannelPriceVariants(rows: Array<Parameters<typ
     }
     if (row.input_price_per_1m > 0 && row.output_price_per_1m > 0 && row.output_price_per_1m < row.input_price_per_1m) {
       throw new Error(`batchUpsertChannelPriceVariants: output < input (${row.model_id}/${row.provider_id}/${row.variant_key})`);
+    }
+    if (!isCachedPriceSane(row.input_price_per_1m, row.cached_input_price_per_1m)) {
+      console.warn(`batchUpsertChannelPriceVariants: cached input ${row.cached_input_price_per_1m} > input ${row.input_price_per_1m} (${row.model_id}/${row.provider_id}/${row.variant_key}) — cached price dropped (NULL)`);
+      row.cached_input_price_per_1m = null;
     }
   }
 
@@ -272,7 +283,7 @@ export async function upsertChannelPrice(data: {
   provider_id: number;
   input_price_per_1m: number;
   output_price_per_1m: number;
-  cached_input_price_per_1m?: number;
+  cached_input_price_per_1m?: number | null;
   rate_limit?: string | number;
   is_available: boolean;
   last_verified: Date;
@@ -305,6 +316,12 @@ export async function upsertChannelPrice(data: {
     throw new Error(
       `upsertChannelPrice: output ($${data.output_price_per_1m}) < input ($${data.input_price_per_1m}) is physically impossible for LLM per-token pricing (model_id=${data.model_id} provider_id=${data.provider_id}) — likely parser bug`
     );
+  }
+
+  if (!isCachedPriceSane(data.input_price_per_1m, data.cached_input_price_per_1m)) {
+    // Cached input can never cost more than uncached input; drop it rather than publish it.
+    console.warn(`upsertChannelPrice: cached input ($${data.cached_input_price_per_1m}) > input ($${data.input_price_per_1m}) (model_id=${data.model_id} provider_id=${data.provider_id}) — likely stale or parser bug` + ' — cached price dropped (NULL)');
+    data = { ...data, cached_input_price_per_1m: null };
   }
 
   // Convert rate_limit to string if it's a number
@@ -500,7 +517,11 @@ export async function getOrCreateProduct(data: {
     providerIdsArray = [data.provider_id];
   }
 
-  // Third: create new - use provider_ids array field
+  // Third: create new - refuse names that look like promo copy, dates, etc.
+  const identity = checkModelIdentity(data.name, data.slug);
+  if (!identity.ok) throw new ModelIdentityRejectedError(data.name, data.slug, identity.reasons);
+
+  // Create new - use provider_ids array field
   const { data: newProduct, error } = await db
     .from('models')
     .insert({
