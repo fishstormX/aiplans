@@ -70,7 +70,7 @@ export interface VerifiedPlanSeed extends Provenance {
   features: Record<string, JSONValue>;
   // Keep a published range without inventing a scalar amount that the
   // economics calculator would turn into a misleading effective rate.
-  quotas: (Quota & { amount_min?: number; amount_max?: number })[];
+  quotas: Quota[];
   modelSelector: ModelSelector | null;
   notes: string;
 }

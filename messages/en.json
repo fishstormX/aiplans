@@ -25,6 +25,9 @@
     "calculator": "Calculator",
     "submitProvider": "Submit Provider"
   },
+  "planAvailability": {
+    "closed": "Historical plan · Closed to new users"
+  },
   "common": {
     "loading": "Loading...",
     "error": "Error",

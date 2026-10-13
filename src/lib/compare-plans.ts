@@ -11,6 +11,7 @@ import { getProviderLogoFallback, getProviderLogoSrc } from '@/lib/provider-bran
 import { groupPlansByKind, normalizePlanKind, type PlanKind } from '@/lib/plan-kinds';
 import { findSubscriptionContext } from '@/lib/subscription-context';
 import { planEconomics, type EconomicPlan, type Quota } from '@/lib/plan-economics';
+import { isClosedToNewUsers } from '@/lib/plan-availability';
 
 /**
  * Builds the plan-comparison payload for one model.
@@ -226,6 +227,7 @@ export async function getPlanComparison(
 
   // Build summary for subscription plans only
   const allPlans = [...officialPlans, ...thirdPartyPlans];
+  const availablePlans = allPlans.filter((p) => !isClosedToNewUsers(p.plan.features));
 
   const planMonthlyUSD = (p: ComparablePlan): number =>
     p.pricing.convertedYearlyMonthly || p.pricing.convertedMonthly || Infinity;
@@ -242,10 +244,10 @@ export async function getPlanComparison(
   // cheaper number won and got labelled "cheapest plan" for the model. Now
   // each kind reports its own winner, so a caller can say "cheapest chat
   // subscription" and "cheapest coding plan" without implying they are
-  // substitutes. `cheapestPlan` still answers "the lowest price on this page"
+  // substitutes. `cheapestPlan` still answers "the lowest available price on this page"
   // for existing callers, which is a defensible question -- it just is not the
   // recommendation it used to be presented as.
-  const cheapestByKind = groupPlansByKind<ComparablePlan>(allPlans, (p) => p.plan.planKind)
+  const cheapestByKind = groupPlansByKind<ComparablePlan>(availablePlans, (p) => p.plan.planKind)
     .flatMap(({ kind, plans: kindPlans }) => {
       const winner = cheapestOf(kindPlans);
       return winner
@@ -261,7 +263,7 @@ export async function getPlanComparison(
         : [];
     });
 
-  const cheapestPlan = cheapestOf(allPlans);
+  const cheapestPlan = cheapestOf(availablePlans);
 
   // Calculate vsOfficial for third-party plans. Both sides are normalized to
   // USD first — the previous version multiplied getExchangeRateSync(x, x)
@@ -272,7 +274,10 @@ export async function getPlanComparison(
   // scored against a chat subscription, producing a discount percentage
   // against a product nobody was choosing between.
   const officialByKind = new Map<PlanKind, ComparablePlan>(
-    groupPlansByKind<ComparablePlan>(officialPlans, (p) => p.plan.planKind)
+    groupPlansByKind<ComparablePlan>(
+      officialPlans.filter((p) => !isClosedToNewUsers(p.plan.features)),
+      (p) => p.plan.planKind,
+    )
       .flatMap(({ kind, plans: kindPlans }) => {
         const priced = kindPlans.filter((p) => typeof p.pricing.monthly === 'number' && p.pricing.monthly);
         const baseline = cheapestOf(priced);

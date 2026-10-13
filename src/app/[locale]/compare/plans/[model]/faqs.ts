@@ -14,6 +14,7 @@ import { formatPrice, type CurrencyCode } from '@/lib/currency';
 import type { Locale } from '@/lib/seo';
 import type { PlanComparison } from '@/lib/compare-plans';
 import { formatModelName } from '@/lib/model-names';
+import { isClosedToNewUsers } from '@/lib/plan-availability';
 
 export type FaqItem = { question: string; answer: string };
 
@@ -22,7 +23,7 @@ type PlanRow = PlanComparison['officialPlans'][number];
 const allRows = (data: PlanComparison): PlanRow[] => [
   ...data.officialPlans,
   ...data.thirdPartyPlans,
-];
+].filter((row) => !isClosedToNewUsers(row.plan.features));
 
 const hasFree = (rows: PlanRow[]): boolean =>
   rows.some((r) => r.plan.planTier === 'free' || r.pricing.monthly === 0);

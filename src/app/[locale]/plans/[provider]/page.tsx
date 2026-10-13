@@ -20,6 +20,9 @@ import SiteHeader from '@/components/SiteHeader';
 import { CouponBadge } from '@/components/coupon-badge';
 import { getActiveCouponMap } from '@/lib/coupons';
 import { guideForProviderSlug, PRICING_GUIDES } from '@/lib/pricing-guides';
+import { isClosedToNewUsers } from '@/lib/plan-availability';
+import enMessages from '@/../messages/en.json';
+import zhMessages from '@/../messages/zh.json';
 
 export async function generateMetadata({
   params,
@@ -114,6 +117,7 @@ export default async function ProviderPlansPage({
   }
 
   const { provider, models, plans } = data;
+  const availablePlans = plans.filter((p) => !isClosedToNewUsers(p.features));
   const providerCoupons = couponByProvider[providerSlug] ?? [];
   const providerData = providerInfo[providerSlug] || { name: provider.name, description: "" };
   const guideSlug = guideForProviderSlug(providerSlug);
@@ -141,7 +145,7 @@ export default async function ProviderPlansPage({
     { name: isZh ? '套餐总览' : 'Plans', url: `${SITE_URL}/${locale}/plans` },
     { name: provider.name, url: `${SITE_URL}/${locale}/plans/${providerSlug}` },
   ]);
-  const planJsonLdItems = plans
+  const planJsonLdItems = availablePlans
     // Contact-sales rows are omitted rather than emitted with a price.
     // They store price=0 to mean "no public price", and productOffer
     // serialises both 0 and null as "0" -- so including them told search
@@ -176,7 +180,7 @@ export default async function ProviderPlansPage({
       description: provider.description,
       modelCount: models.length,
       // `plans` is the untyped SQL result; annotate the return shape only.
-      plans: plans.map((p): ProviderCopyPlan => ({
+      plans: availablePlans.map((p): ProviderCopyPlan => ({
         name: p.name,
         price: p.price ?? null,
         price_unit: p.price_unit ?? null,
@@ -277,11 +281,15 @@ export default async function ProviderPlansPage({
                 </div>
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {kindPlans.map((plan) => (
-                <Card key={plan.id} className={plan.tier === 'pro' ? 'border-blue-500' : ''}>
+                <Card key={plan.id} className={plan.tier === 'pro' && !isClosedToNewUsers(plan.features) ? 'border-blue-500' : ''}>
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <CardTitle>{plan.name}</CardTitle>
-                      {plan.tier === 'pro' && (
+                      {isClosedToNewUsers(plan.features) ? (
+                        <Badge variant="outline">
+                          {(isZh ? zhMessages : enMessages).planAvailability.closed}
+                        </Badge>
+                      ) : plan.tier === 'pro' && (
                         <Badge className="bg-blue-600">Popular</Badge>
                       )}
                     </div>
@@ -365,7 +373,7 @@ export default async function ProviderPlansPage({
                       </div>
                     </div>
 
-                    {(provider.pricing_url || provider.website || provider.invite_url) && (
+                    {!isClosedToNewUsers(plan.features) && (provider.pricing_url || provider.website || provider.invite_url) && (
                       <a
                         href={provider.pricing_url || provider.invite_url || provider.website}
                         target="_blank"

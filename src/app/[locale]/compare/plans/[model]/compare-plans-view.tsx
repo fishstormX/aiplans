@@ -24,6 +24,8 @@ import { getProviderVisitRel, getProviderVisitUrl } from "@/lib/provider-links";
 import { formatModelName } from '@/lib/model-names';
 import { CouponBadge } from "@/components/coupon-badge";
 import { couponsFor, type CouponOffer } from "@/lib/coupon-format";
+import { isClosedToNewUsers } from "@/lib/plan-availability";
+import { useTranslations } from "@/lib/translations";
 
 interface ComparePlansViewProps {
   locale: string;
@@ -55,6 +57,7 @@ interface PlanGroup {
 }
 
 export default function ComparePlansView({ locale, data, faqs, couponByProvider }: ComparePlansViewProps) {
+  const tAvailability = useTranslations('planAvailability');
   // Billing toggle
   const [showYearly, setShowYearly] = useState(false);
   // Every provider starts expanded, and it has to be the *initial* state rather
@@ -269,9 +272,9 @@ export default function ComparePlansView({ locale, data, faqs, couponByProvider 
             <div>
               <span className="font-semibold text-zinc-900 dark:text-zinc-100">{planCount}</span> {locale === "zh" ? "个计划" : "plans"}
             </div>
-            <div>
+            {summary.cheapestPlan && <div>
               <span className="font-semibold text-zinc-900 dark:text-zinc-100">${cheapestPrice.toFixed(2)}</span> {locale === "zh" ? "起" : "from"}
-            </div>
+            </div>}
           </div>
 
           {/* Cheapest entry point per product line */}
@@ -298,6 +301,7 @@ export default function ComparePlansView({ locale, data, faqs, couponByProvider 
             {planGroups.map((group, groupIndex) => {
               const isExpanded = expandedProviders.has(group.providerId);
               const lowestPrice = group.plans.reduce((min, plan) => {
+                if (isClosedToNewUsers(plan.plan.features)) return min;
                 const price = showYearly
                   ? (plan.pricing.yearlyMonthly || plan.pricing.monthly || 0)
                   : (plan.pricing.monthly || 0);
@@ -351,12 +355,13 @@ export default function ComparePlansView({ locale, data, faqs, couponByProvider 
                     <div className="p-4 bg-white dark:bg-black">
                       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
                         {group.plans.map((plan: any, planIndex: number) => {
-                          const isRecommended = groupIndex === 0 && planIndex === 0 && plan.pricing.monthly > 0;
+                          const isClosed = isClosedToNewUsers(plan.plan.features);
+                          const isRecommended = !isClosed && groupIndex === 0 && planIndex === 0 && plan.pricing.monthly > 0;
                           const price = showYearly
                             ? (plan.pricing.yearlyMonthly || plan.pricing.monthly)
                             : plan.pricing.monthly;
                           const channelVisitUrl = getProviderVisitUrl(plan.channel, 'plan');
-                          const planVisitUrl = channelVisitUrl || providerVisitUrl;
+                          const planVisitUrl = isClosed ? null : channelVisitUrl || providerVisitUrl;
 
                           return (
                             <Card
@@ -379,6 +384,7 @@ export default function ComparePlansView({ locale, data, faqs, couponByProvider 
 
                               <CardHeader className="pb-3">
                                 <CardTitle className="text-base">{getPlanName(plan)}</CardTitle>
+                                {isClosed && <Badge variant="outline">{tAvailability('closed')}</Badge>}
                                 <Badge variant="outline" className="mt-1 w-fit text-xs font-normal">
                                   {planKindIcon(normalizePlanKind(plan.plan?.planKind))}{" "}
                                   {planKindLabel(normalizePlanKind(plan.plan?.planKind), locale)}

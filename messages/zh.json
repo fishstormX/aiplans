@@ -25,6 +25,9 @@
     "calculator": "计算器",
     "submitProvider": "提交供应商"
   },
+  "planAvailability": {
+    "closed": "历史套餐 · 已停止新用户订阅"
+  },
   "common": {
     "loading": "加载中...",
     "error": "错误",

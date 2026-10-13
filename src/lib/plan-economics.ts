@@ -29,6 +29,9 @@ export type QuotaPeriod = '5h' | 'day' | 'week' | 'month' | 'total';
 /** One row of `plans.quotas`, as written by scripts/fix-plan-quotas.ts. */
 export type Quota = {
   amount?: number;
+  /** A published range is an allowance, never a scalar rate denominator. */
+  amount_min?: number;
+  amount_max?: number;
   unit: QuotaUnit;
   period?: QuotaPeriod;
   /** Slug of the tier this figure was computed from, when the vendor published
@@ -38,8 +41,13 @@ export type Quota = {
   note?: string;
 };
 
-/** Every unit except `relative` carries an absolute amount. */
+/** Every unit except `relative` can carry an amount or a published range. */
 export type AbsoluteUnit = Exclude<QuotaUnit, 'relative'>;
+
+export type Allowance = { unit: AbsoluteUnit; period: QuotaPeriod } & (
+  | { amount: number }
+  | { amount_min: number; amount_max: number }
+);
 
 /** Only the plan fields that bear on economics. */
 export type EconomicPlan = {
@@ -86,6 +94,12 @@ const UNIT_PRIORITY: AbsoluteUnit[] = ['token', 'credit', 'request', 'message', 
 
 function isAbsolute(q: Quota): q is Quota & { amount: number; unit: AbsoluteUnit } {
   return q.unit !== 'relative' && typeof q.amount === 'number' && q.amount > 0;
+}
+
+function isRange(q: Quota): q is Quota & { amount_min: number; amount_max: number; unit: AbsoluteUnit } {
+  return q.unit !== 'relative' && q.amount == null &&
+    typeof q.amount_min === 'number' && Number.isFinite(q.amount_min) && q.amount_min > 0 &&
+    typeof q.amount_max === 'number' && Number.isFinite(q.amount_max) && q.amount_max >= q.amount_min;
 }
 
 /** Price normalized to a 30-day window, in USD. */
@@ -159,10 +173,10 @@ export type PlanEconomics =
   | { state: 'contact_sales' }
   /** Free tier: a rate of zero is arithmetically true and tells the reader
    *  nothing, so report the allowance without a price per unit. */
-  | { state: 'free'; allowances: EffectiveRate['basis'][] }
+  | { state: 'free'; allowances: Allowance[] }
   /** At least one figure, but nothing divisible into a rate — a one-off grant
-   *  with no validity, or only relative claims with no priced baseline. */
-  | { state: 'not_derivable'; ratios: UsageRatio[]; allowances: EffectiveRate['basis'][] }
+   *  with no validity, a published range, or only relative claims. */
+  | { state: 'not_derivable'; ratios: UsageRatio[]; allowances: Allowance[] }
   /** A verifiable rate. `ratios` may also be present (Le Chat publishes both). */
   | { state: 'rate'; rate: EffectiveRate; ratios: UsageRatio[] };
 
@@ -234,9 +248,12 @@ export function planEconomics(
   if (plan.quotas.length === 0) return { state: 'none_published' };
 
   const absolutes = plan.quotas.filter(isAbsolute);
-  const allowances = absolutes
-    .filter((q) => q.period != null)
-    .map((q) => ({ amount: q.amount, unit: q.unit, period: q.period as QuotaPeriod }));
+  const allowances = plan.quotas.flatMap<Allowance>((q) => {
+    if (q.period == null) return [];
+    if (isAbsolute(q)) return [{ amount: q.amount, unit: q.unit, period: q.period }];
+    if (isRange(q)) return [{ amount_min: q.amount_min, amount_max: q.amount_max, unit: q.unit, period: q.period }];
+    return [];
+  });
   const ratios = resolveRatios(plan, plan.quotas, lookup);
 
   // Checked before price: an enterprise tier can publish real allowances while
@@ -350,11 +367,14 @@ function formatRate(rate: EffectiveRate, locale: string): string {
     : `$${amount} / ${per} ${unit} per month`;
 }
 
-function formatAllowance(basis: EffectiveRate['basis'], locale: string): string {
+function formatAllowance(basis: Allowance, locale: string): string {
   const zh = locale === 'zh';
   const unit = UNIT_LABEL[basis.unit][zh ? 'zh' : 'en'];
   const period = PERIOD_LABEL[basis.period][zh ? 'zh' : 'en'];
-  const amount = basis.amount.toLocaleString(zh ? 'zh-CN' : 'en-US');
+  const numberLocale = zh ? 'zh-CN' : 'en-US';
+  const amount = 'amount' in basis
+    ? basis.amount.toLocaleString(numberLocale)
+    : `${basis.amount_min.toLocaleString(numberLocale)}–${basis.amount_max.toLocaleString(numberLocale)}`;
   return zh ? `${amount} ${unit}／${period}` : `${amount} ${unit} ${period}`;
 }
 
@@ -389,7 +409,7 @@ export type EconomicsDisplay =
   /** Nothing to price. `tone` tells the UI how to style it: `missing` is a
    *  research gap on our side, `absent` is a fact about the vendor. */
   | { kind: 'note'; tone: 'missing' | 'absent'; text: string }
-  /** A free tier: its allowance, with no rate (a $0.00 rate is uninformative). */
+  /** Published allowances with no fixed unit rate, including free tiers. */
   | { kind: 'allowances'; label: string; items: string[] }
   /** Only relative claims — no absolute allowance to divide a price by. */
   | { kind: 'ratios'; label: string; items: string[] }
@@ -435,8 +455,10 @@ export function describeEconomics(e: PlanEconomics, locale: string = 'en'): Econ
       };
     case 'not_derivable':
       return {
-        kind: 'ratios',
-        label: zh ? '厂商只公布相对倍率' : 'Vendor publishes only a relative multiple',
+        kind: e.allowances.length > 0 ? 'allowances' : 'ratios',
+        label: e.allowances.length > 0
+          ? (zh ? '已公布额度（无法折算固定单价）' : 'Published allowance (no fixed unit rate)')
+          : (zh ? '厂商只公布相对倍率' : 'Vendor publishes only a relative multiple'),
         items: [
           ...e.ratios.map((r) => formatRatio(r, locale)),
           ...e.allowances.map((a) => formatAllowance(a, locale)),
