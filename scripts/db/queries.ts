@@ -1,4 +1,5 @@
 import { databaseSql, postgresAdmin } from './postgres-admin';
+import { isClosedToNewUsers } from '../utils/plan-availability';
 
 // Direct PostgreSQL client (postgres.js). Historical name was supabaseAdmin;
 // the platform has never used Supabase at runtime. Exported so the many data
@@ -571,7 +572,7 @@ export async function upsertPlan(data: {
   // First, check if a record exists
   const { data: existing, error: selectError } = await db
     .from('plans')
-    .select('id')
+    .select('*')
     .eq('provider_id', data.provider_id)
     .eq('slug', data.slug)
     .single();
@@ -581,6 +582,10 @@ export async function upsertPlan(data: {
   }
 
   if (existing) {
+    // seed-2026-10-13 marks the superseded Cursor/SuperGrok/X plans here.
+    // Keep their historical price, verification date and availability JSON;
+    // normal scraper writes replace features even though they omit notes.
+    if (isClosedToNewUsers(existing.features)) return existing;
     // Update existing record
     const { data: result, error: updateError } = await db
       .from('plans')
