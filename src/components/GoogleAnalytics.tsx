@@ -9,7 +9,7 @@ import {
   getAnalyticsConsentSnapshot,
   subscribeToConsent,
 } from '@/lib/consent';
-import { classifyTrackedLink, trackAnalyticsEvent } from '@/lib/analytics';
+import { classifyTrackedLink, guideSlugFromPath, trackAnalyticsEvent } from '@/lib/analytics';
 
 const GA_ID = process.env.NEXT_PUBLIC_GA_ID;
 
@@ -61,14 +61,29 @@ export default function GoogleAnalytics() {
       const anchor = event.target.closest('a[href]');
       if (!(anchor instanceof HTMLAnchorElement)) return;
 
-      const tracked = classifyTrackedLink(anchor.href, window.location.origin);
+      const tracked = classifyTrackedLink(anchor.href, window.location.origin, window.location.pathname);
       if (!tracked) return;
+      // Attribute clicks made on a guide page to that guide (funnel step 2→3).
+      const guideSlug = guideSlugFromPath(window.location.pathname) ?? undefined;
+      const position = anchor.dataset.position ? Number(anchor.dataset.position) : undefined;
+
+      if (tracked.kind === 'guide_target') {
+        trackAnalyticsEvent('guide_model_click', {
+          guide_slug: guideSlug,
+          target_type: tracked.targetType,
+          target_slug: tracked.targetSlug,
+          target_path: tracked.targetPath,
+          position,
+        });
+        return;
+      }
 
       if (tracked.kind === 'outbound') {
         trackAnalyticsEvent('outbound_click', {
           link_domain: tracked.domain,
           link_text: anchor.innerText.trim().slice(0, 100),
           link_url: tracked.url,
+          guide_slug: guideSlug,
         });
         return;
       }
@@ -76,6 +91,7 @@ export default function GoogleAnalytics() {
       trackAnalyticsEvent('compare_start', {
         compare_type: tracked.compareType,
         target_path: tracked.targetPath,
+        guide_slug: guideSlug,
       });
     };
 

@@ -27,7 +27,7 @@ jobs:
       - name: Type-check
         run: npx tsc --noEmit
       - name: Pricing guide tests
-        run: npx tsx --test src/lib/pricing-guides.test.ts
+        run: npx tsx --test src/lib/pricing-guides.test.ts src/lib/analytics.test.ts
       - name: Build
         run: npm run build
         env:

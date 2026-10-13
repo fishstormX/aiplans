@@ -6,7 +6,8 @@ export type AnalyticsEventName =
   | 'outbound_click'
   | 'pricing_filter_change'
   | 'pricing_search'
-  | 'global_search';
+  | 'global_search'
+  | 'guide_model_click';
 
 export type AnalyticsEventParams = Record<string, string | number | boolean | undefined>;
 
@@ -20,9 +21,21 @@ declare global {
 export type TrackedLink =
   | { kind: 'comparison'; compareType: 'models' | 'plans'; targetPath: string }
   | { kind: 'outbound'; domain: string; url: string }
+  | { kind: 'guide_target'; targetType: 'model' | 'plan'; targetSlug: string; targetPath: string }
   | null;
 
-export function classifyTrackedLink(href: string, siteOrigin: string): TrackedLink {
+/** Guide slug when the current page is /{locale}/guides/{slug}, else null. */
+export function guideSlugFromPath(pathname: string): string | null {
+  const m = pathname.match(/^\/(?:en|zh)\/guides\/([^/?#]+)\/?$/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+/**
+ * Classify a clicked link. Pass `fromPath` (current page path) so that
+ * guide → model / guide → plan clicks can be observed separately as
+ * `guide_model_click`; other internal links stay untracked.
+ */
+export function classifyTrackedLink(href: string, siteOrigin: string, fromPath?: string): TrackedLink {
   let url: URL;
   let origin: URL;
 
@@ -37,6 +50,18 @@ export function classifyTrackedLink(href: string, siteOrigin: string): TrackedLi
 
   if (url.origin !== origin.origin) {
     return { kind: 'outbound', domain: url.hostname, url: url.toString() };
+  }
+
+  if (fromPath && guideSlugFromPath(fromPath)) {
+    const target = url.pathname.match(/^\/(?:en|zh)\/(models|plans)\/([^/]+)\/?$/);
+    if (target) {
+      return {
+        kind: 'guide_target',
+        targetType: target[1] === 'models' ? 'model' : 'plan',
+        targetSlug: decodeURIComponent(target[2]),
+        targetPath: `${url.pathname}${url.search}`,
+      };
+    }
   }
 
   const comparison = url.pathname.match(/^\/(?:en|zh)\/compare\/(models|plans)(?:\/|$)/);
