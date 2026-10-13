@@ -64,7 +64,7 @@ test('GPT-6.1 Sol maps to Plus/Pro/Business/Team/Enterprise only, never batch', 
     assert.ok(c, planSlug);
     return resolveSelector(c.selector, openaiCatalog, ['openai']).models.map((m) => m.slug);
   };
-  for (const plan of ['chatgpt-plus', 'chatgpt-pro', 'chatgpt-business', 'chatgpt-team', 'chatgpt-enterprise']) {
+  for (const plan of ['chatgpt-plus', 'chatgpt-pro', 'chatgpt-pro-100', 'chatgpt-pro-200', 'chatgpt-pro-500', 'chatgpt-business', 'chatgpt-team', 'chatgpt-enterprise']) {
     assert.deepEqual(slugsFor(plan), ['openai-gpt-6-1-sol'], plan);
   }
   for (const plan of ['chatgpt-free', 'chatgpt-go']) {

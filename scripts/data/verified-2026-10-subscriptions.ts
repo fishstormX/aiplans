@@ -20,7 +20,7 @@ export interface SubscriptionSeed {
   tier: string;
   tierRank: number;
   price: number;
-  planKind: 'bundle' | 'coding';
+  planKind: 'bundle' | 'coding' | 'chat';
   planCategory: 'chatbot' | 'coding';
   planLine: string;
   modelSlugs: string[];

@@ -53,7 +53,7 @@ async function fetchOpenAIPlans(): Promise<{ plans: OpenAIPlan[], errors: string
   const freeMatch = html.match(/Free/i);
   const plusPriceMatch = html.match(/Plus[^$]*?\$\s*20|ChatGPT\s*Plus[^$]*?\$\s*20/i);
   const teamPriceMatch = html.match(/Team[^$]*?\$\s*25|ChatGPT\s*Team[^$]*?\$\s*25/i);
-  const proPriceMatch = html.match(/ChatGPT\s*Pro[^$]*?\$\s*200/i);
+  const proPriceMatch = html.match(/ChatGPT\s*Pro[^$]*?\$\s*(?:100|200|500)|Pro\s*(?:100|200|500)[^$]*?\$\s*(?:100|200|500)/i);
   const enterpriseMatch = html.match(/Enterprise/i);
 
   // Check if we found any pricing information
@@ -117,11 +117,35 @@ async function fetchOpenAIPlans(): Promise<{ plans: OpenAIPlan[], errors: string
     }
   }
 
-  // Pro plan - only add if we found the price
-  if (proPriceMatch) {
+  // Pro plans — three monthly rungs (Pro 100 / 200 / 500) since 2026-10-06.
+  // Match explicit tier prices when present; fall back to a single Pro hit.
+  const proTierMatches: Array<{ name: string; re: RegExp }> = [
+    { name: 'ChatGPT Pro 100', re: /Pro\s*100[^$]{0,40}\$\s*100|\$\s*100[^$]{0,40}Pro\s*100/i },
+    { name: 'ChatGPT Pro 200', re: /Pro\s*200[^$]{0,40}\$\s*200|\$\s*200[^$]{0,40}Pro\s*200/i },
+    { name: 'ChatGPT Pro 500', re: /Pro\s*500[^$]{0,40}\$\s*500|\$\s*500[^$]{0,40}Pro\s*500/i },
+  ];
+  let addedProTier = false;
+  for (const tier of proTierMatches) {
+    if (!tier.re.test(html)) continue;
+    const dollars = tier.name.match(/(\d+)$/)?.[1];
+    if (!dollars) continue;
+    plans.push({
+      name: tier.name,
+      priceMonthly: parseFloat(dollars),
+      priceYearly: undefined,
+      tier: 'pro',
+      dailyMessageLimit: undefined,
+      features: [],
+      paymentMethods: ['Credit Card', 'Debit Card', 'Apple Pay', 'Google Pay'],
+      accessFromChina: false,
+      region: 'global',
+    });
+    addedProTier = true;
+  }
+  if (!addedProTier && proPriceMatch) {
     const priceMatch = proPriceMatch[0].match(/\$?\s*([\d.]+)/);
     if (priceMatch) {
-      const proPlan: OpenAIPlan = {
+      plans.push({
         name: 'ChatGPT Pro',
         priceMonthly: parseFloat(priceMatch[1]),
         priceYearly: undefined,
@@ -131,8 +155,7 @@ async function fetchOpenAIPlans(): Promise<{ plans: OpenAIPlan[], errors: string
         paymentMethods: ['Credit Card', 'Debit Card', 'Apple Pay', 'Google Pay'],
         accessFromChina: false,
         region: 'global',
-      };
-      plans.push(proPlan);
+      });
     }
   }
 
