@@ -115,6 +115,12 @@ export interface OpenRouterFloorSeed {
   displayName: string;
   inputPer1m: number;
   outputPer1m: number;
+  /**
+   * Cache-read price of the same floor endpoint (input_cache_read), verified
+   * 2026-10-13 20:30 SGT. null = endpoint publishes none -> write NULL so a
+   * stale cached price from an older host never survives.
+   */
+  cachedInputPer1m: number | null;
   floorProvider: string;
   /** Other hosts checked while verifying; not written as the headline. */
   alsoSeen?: Array<{ provider: string; inputPer1m: number; outputPer1m: number; note?: string }>;
@@ -135,6 +141,7 @@ export const OPENROUTER_FLOOR_PRICES: OpenRouterFloorSeed[] = [
     displayName: 'gpt-oss-120b',
     inputPer1m: 0.03,
     outputPer1m: 0.15,
+    cachedInputPer1m: 0.03,
     floorProvider: 'Venice',
     alsoSeen: [
       { provider: 'CoreWeave', inputPer1m: 0.03, outputPer1m: 0.17 },
@@ -151,6 +158,7 @@ export const OPENROUTER_FLOOR_PRICES: OpenRouterFloorSeed[] = [
     // aitokenprice 2026-10 report) is NOT the current cheapest host.
     inputPer1m: 0.02,
     outputPer1m: 0.5,
+    cachedInputPer1m: 0.009,
     floorProvider: 'Tenstorrent',
     alsoSeen: [
       { provider: 'Chutes', inputPer1m: 0.039, outputPer1m: 1.25, note: 'aitokenprice Oct report figure; not current floor' },
@@ -164,6 +172,7 @@ export const OPENROUTER_FLOOR_PRICES: OpenRouterFloorSeed[] = [
     displayName: 'Qwen3.6 35B-A3B',
     inputPer1m: 0.05,
     outputPer1m: 0.7,
+    cachedInputPer1m: 0.025,
     floorProvider: 'Darkbloom',
     sourceUrl: 'https://openrouter.ai/qwen/qwen3.6-35b-a3b',
     verified: true,
@@ -179,6 +188,7 @@ export const OPENROUTER_FLOOR_PRICES: OpenRouterFloorSeed[] = [
     displayName: 'Gemma 4 26B-A4B',
     inputPer1m: 0.042,
     outputPer1m: 0.22,
+    cachedInputPer1m: 0.021,
     floorProvider: 'Darkbloom',
     sourceUrl: 'https://openrouter.ai/google/gemma-4-26b-a4b-it',
     verified: true,

@@ -53,6 +53,7 @@ import {
 import type { ScraperResult } from './utils/validator';
 import type { PlanScraperResult } from './utils/plan-validator';
 import { normalizeModelName, normalizeSlug } from './utils/model-normalizer';
+import { checkModelIdentity } from './utils/model-identity-guard';
 import { closeBrowser } from './scrapers/base-fetcher';
 
 /**
@@ -305,6 +306,13 @@ async function processAPIScraper(
         });
       }
       console.log(`⚠️ Skipping ${normalizedName} - unknown provider or model slug ${normalizedSlug}`);
+      return null;
+    }
+
+    const identity = checkModelIdentity(normalizedName, normalizedSlug);
+    if (!identity.ok) {
+      // Never auto-create a public model page from promo copy, dates, etc.
+      console.warn(`🛑 MANUAL_REVIEW ${result.source}: refusing to create model ${JSON.stringify(normalizedName)} (slug ${normalizedSlug}): ${identity.reasons.join(', ')}`);
       return null;
     }
 

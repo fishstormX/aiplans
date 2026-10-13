@@ -17,6 +17,26 @@ function context(text: string | undefined): number | null {
   return match ? Number(match[1].replace(/,/g, '')) : null;
 }
 
+/**
+ * The model cell can carry badges/tooltips next to the id, e.g. during the
+ * Kimi K3 launch promo: `kimi-k3<Badge>Promo</Badge>` plus "Promotion valid
+ * until October 11, 2026". Keep only the leading model id; anything that is
+ * not a plain id is dropped (and the identity guard rejects it downstream).
+ */
+export function parseKimiModelCell(raw: string): string | null {
+  const text = raw
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\{[^}]*\}/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const match = text.match(/^(kimi|moonshot)[a-z0-9.-]*/i);
+  if (!match) return null;
+  let id = match[0].toLowerCase();
+  // "kimi-k3Promo" (no separator between id and badge) → "kimi-k3"
+  id = id.replace(/(?:-?(?:promo|promotion|new|hot|limited))+$/i, '');
+  return /^[a-z0-9][a-z0-9.-]*[a-z0-9]$/.test(id) ? id : null;
+}
+
 class MoonshotScraper extends PlaywrightScraper {
   getSourceName(): string { return 'Moonshot'; }
   getSourceUrl(): string { return PRICING_PAGE; }
@@ -58,7 +78,9 @@ class MoonshotScraper extends PlaywrightScraper {
           continue;
         }
         if (!Array.isArray(cells) || !/1M\s*tokens/i.test(String(cells[unitIndex] ?? ''))) continue;
-        const modelName = normalizeModelName(String(cells[modelIndex] ?? '')).toLowerCase();
+        const modelId = parseKimiModelCell(String(cells[modelIndex] ?? ''));
+        if (!modelId) continue;
+        const modelName = normalizeModelName(modelId).toLowerCase();
         const input = price(String(cells[inputIndex] ?? ''));
         const output = price(String(cells[outputIndex] ?? ''));
         if (!modelName || seen.has(modelName) || input == null || output == null || output < input) continue;
