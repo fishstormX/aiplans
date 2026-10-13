@@ -31,7 +31,7 @@ test('maps relevant providers and validates only own guide slugs', () => {
   assert.equal(guideForProviderSlug('anthropic'), 'claude-anthropic-pricing');
   assert.equal(guideForProviderSlug('moonshot-china'), 'kimi-api-pricing');
   assert.equal(guideForProviderSlug('openai'), 'openai-api-pricing');
-  assert.equal(guideForProviderSlug('cursor'), 'cursor-x-subscription-pricing');
+  assert.equal(guideForProviderSlug('cursor'), null);
   assert.equal(guideForProviderSlug('xai'), 'cursor-x-subscription-pricing');
   assert.equal(guideForProviderSlug('openrouter'), null);
   assert.equal(isPricingGuideSlug('openai-api-pricing'), true);
@@ -99,7 +99,7 @@ test('Cursor is a static subscription guide and empty patterns never load model 
   const guide = PRICING_GUIDES['cursor-x-subscription-pricing'];
   assert.equal(guide.priceTable, false);
   assert.deepEqual(guide.queryPatterns, []);
-  assert.deepEqual(guide.providerSlugs, ['cursor', 'xai']);
+  assert.deepEqual(guide.providerSlugs, ['xai']);
   assert.ok(guide.planTable && guide.planTable.length > 0);
   assert.equal(guide.faqs?.length, 4);
   assert.deepEqual(await getPricingGuideModels(guide), []);
