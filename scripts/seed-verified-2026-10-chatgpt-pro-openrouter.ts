@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * Seed ChatGPT Pro 100/200/500 and refresh OpenRouter floor prices for six
+ * Seed ChatGPT Pro 100/200/500 and refresh OpenRouter floor prices for four
  * open-weight models, verified 2026-10-13 against official sources.
  *
  * Dry-run by default; --apply writes.
