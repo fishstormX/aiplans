@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { X_SUBSCRIPTION_PLANS, MUSE_CODE_PLANS, MUSE_WONDER_MODEL, SUBQ_SNAP_PLAN, LEGACY_CLOSED_RULES, SHARED_POOL_MARKER, THIRD_PARTY_MARKER } from './verified-2026-10-subscriptions';
 import { subscriptionPlanRow } from './subscription-plan-row';
+import { catalogForKind } from '../../src/lib/ai-vertical-catalog';
 
 test('X Subscription tiers and prices', () => {
   assert.deepEqual(X_SUBSCRIPTION_PLANS.map((p) => [p.slug.replace('x-subscription-', ''), p.price]),
@@ -42,6 +43,9 @@ test('Muse quotas scale from Everyday; paid X tiers carry a Grok selector', () =
 });
 
 test('Cursor stays in the existing X Subscription bundle; access does not cover third-party usage', () => {
+  const cursor = catalogForKind('agent').find((item) => item.name === 'Cursor Background Agents');
+  assert.equal(cursor?.providerSlug, 'xai');
+  assert.match(cursor?.pricing ?? '', /The X Subscription.*third-party models billed separately/);
   assert.equal(X_SUBSCRIPTION_PLANS.length, 5);
   for (const seed of X_SUBSCRIPTION_PLANS) {
     const row = subscriptionPlanRow(seed, 85, new Date('2026-10-13T01:00:00Z'));
