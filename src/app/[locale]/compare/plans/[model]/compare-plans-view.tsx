@@ -43,7 +43,7 @@ interface CheapestByKind {
   channel: string;
   monthlyPrice: number;
   currency: string;
-  convertedMonthlyPrice?: number;
+  convertedMonthlyPrice?: number | null;
 }
 
 interface PlanGroup {

@@ -290,7 +290,9 @@ export default async function ProviderPlansPage({
                       {/* The section heading already states the product line,
                           so the card says who the plan is for -- which is all
                           `tier` means now that plan_kind carries the rest. */}
-                      {plan.tier === 'team'
+                      {plan.tier == null
+                        ? (isZh ? '档位未知' : 'Tier unknown')
+                        : plan.tier === 'team'
                         ? (isZh ? '团队（按席位）' : 'Team, per seat')
                         : plan.tier === 'enterprise'
                           ? (isZh ? '企业版' : 'Enterprise')
@@ -365,7 +367,7 @@ export default async function ProviderPlansPage({
                       )}
                       <div className="flex justify-between">
                         <span className="text-zinc-500">{isZh ? '中国直连' : 'China Access'}</span>
-                        <span>{plan.access_from_china ? (isZh ? '✓ 可用' : '✓ Available') : (isZh ? '✗ 不可用' : '✗ Not available')}</span>
+                        <span>{plan.access_from_china == null ? (isZh ? '未知' : 'Unknown') : plan.access_from_china ? (isZh ? '✓ 可用' : '✓ Available') : (isZh ? '✗ 不可用' : '✗ Not available')}</span>
                       </div>
                     </div>
 
