@@ -95,14 +95,13 @@ test('every guide has reviewed sources, at least three FAQs and complete bilingu
   }
 });
 
-test('Cursor is a static subscription guide and empty patterns never load model prices', async () => {
+test('Cursor is a static subscription guide with related-model patterns; empty patterns never load model prices', async () => {
   const guide = PRICING_GUIDES['cursor-x-subscription-pricing'];
   assert.equal(guide.priceTable, false);
-  assert.deepEqual(guide.queryPatterns, []);
+  assert.deepEqual(guide.queryPatterns, ['%grok%', 'claude-%', 'gpt-%']);
   assert.deepEqual(guide.providerSlugs, ['xai']);
   assert.ok(guide.planTable && guide.planTable.length > 0);
   assert.equal(guide.faqs?.length, 4);
-  assert.deepEqual(await getPricingGuideModels(guide), []);
   assert.deepEqual(await getPricingGuideModels({ ...PRICING_GUIDES['openai-api-pricing'], queryPatterns: [] }), []);
 });
 

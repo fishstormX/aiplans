@@ -18,6 +18,13 @@ const nextConfig: NextConfig = {
   // gives slightly less fingerprinting info to bots.
   poweredByHeader: false,
 
+  // Cursor plans were folded into xAI's X Subscription (aiplans#87).
+  async redirects() {
+    return [
+      { source: '/:locale(en|zh)/plans/cursor', destination: '/:locale/plans/xai', statusCode: 301 },
+    ];
+  },
+
   // Next.js per-package imports tree-shaking. Without this, importing
   // `{ Search } from 'lucide-react'` pulls in the entire icon library
   // (~200KB before gzip). The setting rewrites each import to target

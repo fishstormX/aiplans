@@ -15,6 +15,8 @@ const RESEARCH_PATHS = [
   '/zh/guides/grok-pricing',
   '/en/guides/kimi-api-pricing',
   '/zh/guides/kimi-api-pricing',
+  '/en/guides/cursor-x-subscription-pricing',
+  '/zh/guides/cursor-x-subscription-pricing',
   '/en/reports/api-price-index',
   '/zh/reports/api-price-index',
   '/en/api-pricing',
