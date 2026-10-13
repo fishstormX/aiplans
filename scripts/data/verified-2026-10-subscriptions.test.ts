@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { X_SUBSCRIPTION_PLANS, MUSE_CODE_PLANS, MUSE_WONDER_MODEL, LEGACY_CLOSED_RULES, SHARED_POOL_MARKER, THIRD_PARTY_MARKER } from './verified-2026-10-subscriptions';
+import { X_SUBSCRIPTION_PLANS, MUSE_CODE_PLANS, MUSE_WONDER_MODEL, SUBQ_SNAP_PLAN, LEGACY_CLOSED_RULES, SHARED_POOL_MARKER, THIRD_PARTY_MARKER } from './verified-2026-10-subscriptions';
+import { subscriptionPlanRow } from './subscription-plan-row';
+import { catalogForKind } from '../../src/lib/ai-vertical-catalog';
 
 test('X Subscription tiers and prices', () => {
   assert.deepEqual(X_SUBSCRIPTION_PLANS.map((p) => [p.slug.replace('x-subscription-', ''), p.price]),
     [['free', 0], ['plus', 8], ['premium', 30], ['super', 100], ['ultra', 200]]);
   for (const p of X_SUBSCRIPTION_PLANS.slice(1)) assert.ok(p.noteLines.includes(SHARED_POOL_MARKER));
-  for (const p of X_SUBSCRIPTION_PLANS) assert.equal(p.noteLines.includes(THIRD_PARTY_MARKER), p.price >= 30);
+  for (const p of X_SUBSCRIPTION_PLANS) assert.equal(p.noteLines.includes(THIRD_PARTY_MARKER), (p.price ?? 0) >= 30);
 });
 
 test('Muse Code tiers; only Power and Maximum include Full', () => {
@@ -35,7 +37,39 @@ test('legacy xAI rules cover both xai and grok vendor slugs', () => {
 });
 
 test('Muse quotas scale from Everyday; paid X tiers carry a Grok selector', () => {
-  assert.deepEqual(MUSE_CODE_PLANS.map((p) => p.quotas[0].amount), [50, 250, 1000, 4000]);
+  assert.deepEqual(MUSE_CODE_PLANS.map((p) => p.quotas?.[0].amount), [50, 250, 1000, 4000]);
   assert.equal(X_SUBSCRIPTION_PLANS[0].modelSelector, null);
   for (const p of X_SUBSCRIPTION_PLANS.slice(1)) assert.deepEqual(p.modelSelector?.providers, ['xai']);
+});
+
+test('Cursor stays in the existing X Subscription bundle; access does not cover third-party usage', () => {
+  const cursor = catalogForKind('agent').find((item) => item.name === 'Cursor Background Agents');
+  assert.equal(cursor?.providerSlug, 'xai');
+  assert.match(cursor?.pricing ?? '', /The X Subscription.*third-party models billed separately/);
+  assert.equal(X_SUBSCRIPTION_PLANS.length, 5);
+  for (const seed of X_SUBSCRIPTION_PLANS) {
+    const row = subscriptionPlanRow(seed, 85, new Date('2026-10-13T01:00:00Z'));
+    assert.equal(seed.providerSlug, 'xai');
+    assert.equal(row.provider_id, 85);
+    assert.equal(row.plan_kind, 'bundle');
+    assert.equal(row.plan_line, 'x-subscription');
+    assert.equal(row.third_party_coverage, 'none');
+    assert.match(row.third_party_coverage_note ?? '', /Cursor.*not included.*billed separately/);
+    if (seed.price) assert.ok(seed.features.includes('Cursor uses the shared Grok usage pool'));
+  }
+});
+
+test('SubQ Snap persists unknown data without inheriting verified prices or model access', () => {
+  const row = subscriptionPlanRow(SUBQ_SNAP_PLAN, 123, new Date('2026-10-13T01:00:00Z'));
+  assert.equal(row.name, 'SubQ Snap');
+  assert.equal(row.slug, 'subq-snap');
+  assert.equal(row.provider_id, 123);
+  assert.equal(row.third_party_coverage, 'unknown');
+  for (const value of [row.price, row.annual_price, row.price_yearly_monthly, row.currency,
+    row.price_unit, row.quotas, row.model_selector, row.last_verified, row.is_official,
+    row.region, row.access_from_china, row.third_party_coverage_note]) assert.equal(value, null);
+  assert.deepEqual(row.features, []);
+  assert.match(row.notes, /Unverified.*TODO/);
+  assert.doesNotMatch(row.notes, /Source quote:|Source:|Allowance:/);
+  assert.equal(row.source, 'manual');
 });

@@ -1,4 +1,5 @@
 import { databaseSql, postgresAdmin } from './postgres-admin';
+import type { JSONValue } from 'postgres';
 
 // Direct PostgreSQL client (postgres.js). Historical name was supabaseAdmin;
 // the platform has never used Supabase at runtime. Exported so the many data
@@ -187,8 +188,8 @@ export async function batchUpsertChannelPriceVariants(rows: Array<Parameters<typ
     is_headline: row.is_headline ?? false,
     headline_rank: row.headline_rank ?? null,
     headline_reason: row.headline_reason ?? null,
-    constraints_json: row.constraints_json ?? {},
-    raw_json: row.raw_json ?? {},
+    constraints_json: (row.constraints_json ?? {}) as JSONValue,
+    raw_json: (row.raw_json ?? {}) as JSONValue,
     notes: row.notes ?? null,
     last_verified: row.last_verified,
     updated_at: new Date(),
@@ -245,7 +246,8 @@ export async function retireUnseenChannelPriceVariants(
     .eq('is_available', true);
   if (error) throw error;
 
-  const unseen = (activeRows ?? []).filter(row => !seenKeys.has(`${row.model_id}:${row.variant_key}`));
+  const activeVariants = (activeRows ?? []) as Array<{ id: number; model_id: number; variant_key: string; notes: string | null }>;
+  const unseen = activeVariants.filter(row => !seenKeys.has(`${row.model_id}:${row.variant_key}`));
   if (unseen.length === 0) return 0;
 
   const retiredAt = new Date().toISOString();
@@ -829,7 +831,8 @@ export async function cleanupOutdatedPlans(providerId: number, currentSlugs: str
     .or('source.eq.scraper,source.is.null');
   if (error) throw error;
 
-  const unseen = (existingPlans ?? []).filter(plan => !currentSlugs.includes(plan.slug));
+  const plans = (existingPlans ?? []) as Array<{ id: number; name: string; slug: string; source: string | null }>;
+  const unseen = plans.filter(plan => !currentSlugs.includes(plan.slug));
   if (unseen.length > 0) {
     console.log(`⚠️  ${unseen.length} existing scraper plans not seen in this run for provider ${providerId}:`);
     for (const plan of unseen) {

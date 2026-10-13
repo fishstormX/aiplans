@@ -4,6 +4,7 @@ import { catalogForKind, type AiCatalogItem, type AiCatalogKind } from '@/lib/ai
 import { getVerticalModelCatalog } from '@/lib/vertical-models';
 import type { ModelBenchmarkScore } from '@/lib/benchmarks';
 import { getVerticalBenchmarkScores } from '@/lib/vertical-benchmarks';
+import type { PlanCoverageFields } from '@/lib/third-party-coverage';
 
 const KIND_TO_CATEGORY: Partial<Record<AiCatalogKind, 'video' | 'music' | 'world'>> = {
   'video-model': 'video',
@@ -11,7 +12,7 @@ const KIND_TO_CATEGORY: Partial<Record<AiCatalogKind, 'video' | 'music' | 'world
   'world-model': 'world',
 };
 
-export interface VerticalModelPlanRow {
+export interface VerticalModelPlanRow extends PlanCoverageFields {
   id: number;
   name: string;
   slug: string;
@@ -72,6 +73,8 @@ async function getPlans(modelId: number): Promise<VerticalModelPlanRow[]> {
       pl.included_usage_unit,
       pl.included_usage_amount,
       pl.is_contact_sales,
+      pl.third_party_coverage,
+      pl.third_party_coverage_note,
       pl.source,
       pl.notes,
       pl.last_verified::text AS last_verified,

@@ -16,6 +16,7 @@ FROM deps AS migrator
 WORKDIR /app
 COPY package.json tsconfig.json ./
 COPY scripts ./scripts
+COPY drizzle ./drizzle
 CMD ["npm", "run", "migrate"]
 
 FROM deps AS scraper

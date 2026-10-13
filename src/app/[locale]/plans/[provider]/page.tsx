@@ -13,6 +13,7 @@ import { getProviderLogoFallback, getProviderLogoSrc } from "@/lib/provider-bran
 import { groupPlansByKind, planKindDescription, planKindIcon, planKindLabel } from "@/lib/plan-kinds";
 import { describeEconomics, planEconomics, type EconomicPlan } from "@/lib/plan-economics";
 import { PlanRate } from "@/components/plan-rate";
+import { PlanCoverage } from "@/components/plan-coverage";
 import { buildMetadata, breadcrumbList, productOffer, faqPage, SITE_URL, type Locale } from "@/lib/seo";
 import { buildProviderCopy, type ProviderCopyPlan } from "@/lib/provider-copy";
 import { decodeSlugParam } from "@/lib/route-params";
@@ -289,7 +290,9 @@ export default async function ProviderPlansPage({
                       {/* The section heading already states the product line,
                           so the card says who the plan is for -- which is all
                           `tier` means now that plan_kind carries the rest. */}
-                      {plan.tier === 'team'
+                      {plan.tier == null
+                        ? (isZh ? '档位未知' : 'Tier unknown')
+                        : plan.tier === 'team'
                         ? (isZh ? '团队（按席位）' : 'Team, per seat')
                         : plan.tier === 'enterprise'
                           ? (isZh ? '企业版' : 'Enterprise')
@@ -309,11 +312,13 @@ export default async function ProviderPlansPage({
                           ? (isZh ? '按需报价' : 'Custom')
                           : plan.price === 0
                             ? 'Free'
+                            : plan.price == null
+                              ? (isZh ? '价格未知' : 'Price unknown')
                             : showYearly && getPlanYearlyMonthly(plan)
                               ? formatPrice(getPlanYearlyMonthly(plan)! * 12, planCurrency(plan), locale)
                               : formatPrice(plan.price, planCurrency(plan), locale)}
                       </span>
-                      {plan.price_unit && plan.price !== 0 && !plan.is_contact_sales && (
+                      {plan.price_unit && plan.price != null && plan.price !== 0 && !plan.is_contact_sales && (
                         <span className="text-zinc-500 text-sm ml-1">
                           /{showYearly ? 'year' : (plan.price_unit === 'per_month' ? 'mo' : plan.price_unit.replace('_', ' '))}
                         </span>
@@ -341,6 +346,7 @@ export default async function ProviderPlansPage({
                     <Separator className="my-4" />
 
                     <div className="space-y-2 text-sm">
+                      <PlanCoverage coverage={plan.third_party_coverage} note={plan.third_party_coverage_note} locale={locale} />
                       {plan.monthly_message_limit !== null && (
                         <div className="flex justify-between">
                           <span className="text-zinc-500">{isZh ? '消息数' : 'Messages'}</span>
@@ -361,7 +367,7 @@ export default async function ProviderPlansPage({
                       )}
                       <div className="flex justify-between">
                         <span className="text-zinc-500">{isZh ? '中国直连' : 'China Access'}</span>
-                        <span>{plan.access_from_china ? (isZh ? '✓ 可用' : '✓ Available') : (isZh ? '✗ 不可用' : '✗ Not available')}</span>
+                        <span>{plan.access_from_china == null ? (isZh ? '未知' : 'Unknown') : plan.access_from_china ? (isZh ? '✓ 可用' : '✓ Available') : (isZh ? '✗ 不可用' : '✗ Not available')}</span>
                       </div>
                     </div>
 

@@ -2,11 +2,11 @@
  * Verified 2026-10-13 (SGT) against official pages. Pure data, no DB access,
  * so it can be unit-tested. Applied by scripts/seed-verified-2026-10-subscriptions.ts.
  *
- * Schema notes: plans has no columns for "usage pool shared across products",
- * "third-party models billed at API list price" or "closed to new users".
- * These are expressed via quotas[].note / features / notes (existing columns),
- * plus a machine-readable `[aiplans:*]` marker line in notes. No schema change.
+ * Shared pools and legacy closure use existing notes markers. Third-party
+ * quota coverage has dedicated fields (migration 028). SubQ Snap is an
+ * unverified placeholder requested for the catalog, not part of the verified data.
  */
+import type { ThirdPartyCoverage } from '../../src/lib/third-party-coverage';
 export const VERIFIED_AT_ISO = '2026-10-13T01:00:00.000Z';
 
 export const LEGACY_CLOSED_MARKER = '[aiplans:legacy-closed-to-new-users 2026-10-12]';
@@ -17,34 +17,52 @@ export interface SubscriptionSeed {
   providerSlug: string;
   slug: string;
   name: string;
-  tier: string;
-  tierRank: number;
-  price: number;
-  planKind: 'bundle' | 'coding';
+  tier: string | null;
+  tierRank: number | null;
+  price: number | null;
+  annualPrice: number | null;
+  currency: string | null;
+  priceUnit: 'per_month' | null;
+  region: 'global' | null;
+  accessFromChina: boolean | null;
+  isOfficial: boolean | null;
+  billingGranularity: 'flat_monthly' | null;
+  verifiedAt: string | null;
+  thirdPartyCoverage: ThirdPartyCoverage;
+  thirdPartyCoverageNote: string | null;
+  planKind: 'bundle' | 'coding' | 'chat';
   planCategory: 'chatbot' | 'coding';
   planLine: string;
   modelSlugs: string[];
   modelSelector: { providers?: string[]; families?: string[]; current_only?: boolean } | null;
-  quotas: Array<{ amount: number; unit: 'prompt'; period: '5h'; derived_from?: string; multiplier?: number; note?: string }>;
+  quotas: Array<{ amount: number; unit: 'prompt'; period: '5h'; derived_from?: string; multiplier?: number; note?: string }> | null;
   features: string[];
-  quotaNote: string;
+  quotaNote: string | null;
   noteLines: string[];
-  sourceUrl: string;
-  sourceQuote: string;
+  sourceUrl: string | null;
+  sourceQuote: string | null;
 }
+
+const VERIFIED_SUBSCRIPTION_FIELDS = {
+  annualPrice: null, currency: 'USD', priceUnit: 'per_month', region: 'global',
+  accessFromChina: false, isOfficial: true, billingGranularity: 'flat_monthly', verifiedAt: VERIFIED_AT_ISO,
+} as const;
 
 const XAI_SRC = 'https://x.ai/pricing';
 const XAI_POOL = 'One pool of Grok-model usage shared across Grok, Grok Bot, Cursor and X; refreshes weekly; top-ups after exhaustion.';
 const XAI_3P = 'Third-party models in Cursor are not included; billed separately at API list price via top-ups, spending caps available.';
 const xai = (slug: string, name: string, tier: string, tierRank: number, price: number, usage: string, features: string[], thirdParty: boolean): SubscriptionSeed => ({
+  ...VERIFIED_SUBSCRIPTION_FIELDS,
   providerSlug: 'xai', slug, name, tier, tierRank, price,
+  // Cursor is a surface of this bundle, not a new vendor or a separate quota.
+  thirdPartyCoverage: 'none', thirdPartyCoverageNote: XAI_3P,
   planKind: 'bundle', planCategory: 'chatbot', planLine: 'x-subscription',
   modelSlugs: [],
   // Grok-family models; resolved into model_plan_mapping by materialize-model-plan-mappings.
   modelSelector: tierRank === 0 ? null : { providers: ['xai'], families: ['grok'], current_only: true },
   // xAI publishes only relative multipliers (4x/15x/50x Plus), no absolute number.
   quotas: [],
-  features: [usage, ...features, ...(thirdParty ? ['3rd party models available in Cursor, billed separately'] : [])],
+  features: [usage, ...features, ...(tierRank > 0 ? ['Cursor uses the shared Grok usage pool'] : []), ...(thirdParty ? ['3rd party models available in Cursor, billed separately'] : [])],
   quotaNote: `${usage}. ${tierRank === 0 ? 'Limited free usage.' : XAI_POOL}`,
   noteLines: [
     'The X Subscription (launched 2026-10-12): Grok + Grok Bot + Cursor + X Premium in one plan.',
@@ -79,7 +97,9 @@ export const LEGACY_CLOSED_NOTE = `${LEGACY_CLOSED_MARKER} No longer available t
 
 const META_SUB_SRC = 'https://dev.meta.ai/help/subscriptions/what-is-a-muse-code-subscription';
 const muse = (slug: string, name: string, tierRank: number, price: number, usage: string, full: boolean): SubscriptionSeed => ({
+  ...VERIFIED_SUBSCRIPTION_FIELDS,
   providerSlug: 'meta', slug, name, tier: ['basic', 'pro', 'max', 'ultra'][tierRank], tierRank, price,
+  thirdPartyCoverage: 'unknown', thirdPartyCoverageNote: null,
   planKind: 'coding', planCategory: 'coding', planLine: 'muse-code',
   modelSlugs: ['muse-wonder'],
   modelSelector: null,
@@ -101,6 +121,18 @@ export const MUSE_CODE_PLANS: SubscriptionSeed[] = [
   muse('muse-code-power', 'Muse Code Power', 2, 50, '20x Everyday usage', true),
   muse('muse-code-maximum', 'Muse Code Maximum', 3, 200, '80x Everyday usage', true),
 ];
+
+export const SUBQ_SNAP_PLAN: SubscriptionSeed = {
+  providerSlug: 'subq', slug: 'subq-snap', name: 'SubQ Snap',
+  tier: null, tierRank: null, price: null, annualPrice: null, currency: null, priceUnit: null,
+  region: null, accessFromChina: null, isOfficial: null, billingGranularity: null, verifiedAt: null,
+  thirdPartyCoverage: 'unknown', thirdPartyCoverageNote: null,
+  // Keep the schema's default chat/chatbot taxonomy until the product is researched.
+  planKind: 'chat', planCategory: 'chatbot', planLine: 'subq-snap',
+  modelSlugs: [], modelSelector: null, quotas: null, quotaNote: null, features: [],
+  noteLines: ['Unverified catalog placeholder: no SubQ Snap pricing, quota or model-access data exists in the repository. TODO: verify pricing, plan taxonomy, model access and third-party quota coverage.'],
+  sourceUrl: null, sourceQuote: null,
+};
 
 export const MUSE_WONDER_MODEL = {
   slug: 'muse-wonder',

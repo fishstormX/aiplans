@@ -1,15 +1,17 @@
 #!/usr/bin/env tsx
 /**
- * Seed The X Subscription tiers, Muse Code tiers and muse-wonder-1.0 API price,
+ * Seed The X Subscription tiers (including Cursor), Muse Code tiers and
+ * muse-wonder-1.0 API price, plus an unverified SubQ Snap placeholder,
  * and mark legacy SuperGrok / X Premium / Cursor plans closed to new users
  * (kept, not deleted). Dry-run by default; --apply writes.
  */
 import { db } from './db/queries';
 import {
   MUSE_CODE_PLANS, MUSE_WONDER_MODEL,
-  VERIFIED_AT_ISO, X_SUBSCRIPTION_PLANS, type SubscriptionSeed,
+  VERIFIED_AT_ISO, X_SUBSCRIPTION_PLANS, SUBQ_SNAP_PLAN, type SubscriptionSeed,
 } from './data/verified-2026-10-subscriptions';
 import { markLegacyPlans } from './data/mark-legacy-plans';
+import { subscriptionPlanRow } from './data/subscription-plan-row';
 
 const APPLY = process.argv.includes('--apply');
 const NOW = new Date();
@@ -19,10 +21,10 @@ const META_SLUGS = ['meta', 'meta-ai', 'meta-llama'];
 interface ProviderRow { id: number; slug: string; name: string }
 let failures = 0;
 
-async function loadProviders() {
+async function loadProviders(): Promise<Map<string, ProviderRow>> {
   const { data, error } = await db.from('providers').select('id, slug, name');
   if (error) throw error;
-  return new Map((data ?? []).map((p: ProviderRow) => [p.slug, p]));
+  return new Map<string, ProviderRow>((data ?? []).map((p: ProviderRow) => [p.slug, p]));
 }
 
 async function ensureMetaProvider(providers: Map<string, ProviderRow>): Promise<ProviderRow | null> {
@@ -32,6 +34,20 @@ async function ensureMetaProvider(providers: Map<string, ProviderRow>): Promise<
   const { data, error } = await db.from('providers').insert({
     name: 'Meta', slug: 'meta', website: 'https://dev.meta.ai', pricing_url: 'https://dev.meta.ai/docs/overview',
     region: 'global', type: 'official', access_from_china: false,
+  }).select('id, slug, name').single();
+  if (error) throw error;
+  return data as ProviderRow;
+}
+
+async function ensureSubQProvider(providers: Map<string, ProviderRow>): Promise<ProviderRow> {
+  const existing = providers.get(SUBQ_SNAP_PLAN.providerSlug);
+  if (existing) return existing;
+  console.log('  ➕ provider subq (unverified placeholder; metadata unknown)');
+  if (!APPLY) return { id: -2, slug: 'subq', name: 'SubQ' };
+  const { data, error } = await db.from('providers').insert({
+    name: 'SubQ', slug: 'subq', website: null, pricing_url: null,
+    region: null, currency: null, type: null, access_from_china: null,
+    notes: 'Unverified catalog placeholder for SubQ Snap; provider metadata needs research.',
   }).select('id, slug, name').single();
   if (error) throw error;
   return data as ProviderRow;
@@ -78,27 +94,12 @@ async function upsertApiPrice(modelId: number, provider: ProviderRow) {
   if (error) throw error;
 }
 
-function planRow(seed: SubscriptionSeed, provider: ProviderRow) {
-  return {
-    provider_id: provider.id, product_id: provider.id, name: seed.name, slug: seed.slug,
-    pricing_model: 'subscription', price: seed.price, currency: 'USD', price_unit: 'per_month',
-    tier: seed.tier, tier_rank: seed.tierRank, is_official: true, is_contact_sales: false,
-    access_from_china: false, region: 'global', source: 'manual',
-    plan_kind: seed.planKind, plan_category: seed.planCategory, plan_line: seed.planLine,
-    billing_granularity: 'flat_monthly', features: seed.features,
-    quotas: seed.quotas,
-    model_selector: seed.modelSelector,
-    notes: [...seed.noteLines, `Allowance: ${seed.quotaNote}`, `Source quote: ${seed.sourceQuote}`, `Source: ${seed.sourceUrl}`].join('\n'),
-    last_verified: VERIFIED_AT, updated_at: NOW,
-  };
-}
-
 async function upsertPlan(seed: SubscriptionSeed, provider: ProviderRow): Promise<number> {
   const existing = provider.id < 0 ? { data: null, error: null } : await db.from('plans').select('id').eq('provider_id', provider.id).eq('slug', seed.slug).maybeSingle();
   if (existing.error) throw existing.error;
-  console.log(`  ${existing.data ? '↻' : '➕'} plan ${provider.slug}/${seed.slug}: USD ${seed.price}/mo`);
+  console.log(`  ${existing.data ? '↻' : '➕'} plan ${provider.slug}/${seed.slug}: ${seed.price == null ? 'price unknown' : `${seed.currency} ${seed.price}/mo`}`);
   if (!APPLY) return existing.data?.id ?? -1;
-  const row = planRow(seed, provider);
+  const row = subscriptionPlanRow(seed, provider.id, NOW);
   if (existing.data) { const { error } = await db.from('plans').update(row).eq('id', existing.data.id); if (error) throw error; return existing.data.id; }
   const { data, error } = await db.from('plans').insert(row).select('id').single();
   if (error) throw error;
@@ -125,6 +126,7 @@ async function main() {
   if (!xai) { console.log('  ⚠ missing provider xai'); failures++; }
   else for (const seed of X_SUBSCRIPTION_PLANS) await upsertPlan(seed, xai);
   await markLegacy(providers);
+  await upsertPlan(SUBQ_SNAP_PLAN, await ensureSubQProvider(providers));
 
   const meta = await ensureMetaProvider(providers);
   if (meta) {

@@ -14,6 +14,7 @@
  */
 import { config } from 'dotenv';
 import { resolve } from 'path';
+import { readFileSync } from 'node:fs';
 config({ path: resolve(process.cwd(), '.env.local') });
 
 import postgres from 'postgres';
@@ -888,6 +889,10 @@ const MIGRATIONS: Migration[] = [
         created_at timestamptz NOT NULL DEFAULT now()
       );
     `,
+  },
+  {
+    name: '028_add_plan_third_party_coverage',
+    sql: readFileSync(new URL('../drizzle/0001_plan_third_party_coverage.sql', import.meta.url), 'utf8'),
   },
 ];
 
