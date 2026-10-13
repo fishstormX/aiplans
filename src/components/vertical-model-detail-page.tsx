@@ -10,6 +10,7 @@ import type { VerticalModelDetail } from '@/lib/vertical-model-detail';
 import ModelBenchmarkPanel from '@/components/model-benchmark-panel';
 import { verticalKindPath } from '@/lib/vertical-model-detail';
 import { getVerticalProviderLogo } from '@/lib/vertical-provider-logos';
+import { PlanCoverage } from '@/components/plan-coverage';
 
 function formatMoney(value: number | null, currency: string | null): string {
   if (value == null) return '—';
@@ -206,6 +207,9 @@ export default function VerticalModelDetailPage({
                       {plan.included_usage_unit && (
                         <div className="mt-1 text-zinc-500">{plan.included_usage_amount ?? '—'} {plan.included_usage_unit}</div>
                       )}
+                      <div className="mt-2">
+                        <PlanCoverage coverage={plan.third_party_coverage} note={plan.third_party_coverage_note} locale={locale} />
+                      </div>
                       {plan.source === 'manual' && (
                         <Badge variant="outline" className="mt-2">{isZh ? '人工核验引用' : 'manual reference'}</Badge>
                       )}

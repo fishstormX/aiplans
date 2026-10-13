@@ -1,4 +1,6 @@
 import { sql, INT4_ARRAY } from '@/lib/db';
+import type { PlanCoverageFields } from '@/lib/third-party-coverage';
+import type { EconomicPlan } from '@/lib/plan-economics';
 
 /**
  * The plan listing behind /api/plans, extracted so server components can build
@@ -14,24 +16,56 @@ export type PlanQuery = {
   includeModels?: boolean;
 };
 
-export async function getPlans(query: PlanQuery = {}): Promise<any[]> {
+interface PlanProvider {
+  id: number;
+  name: string;
+  slug: string;
+  logo: string | null;
+  logo_url: string | null;
+  region: string | null;
+  [field: string]: unknown;
+}
+
+interface PlanModel {
+  id: number;
+  name: string;
+  slug: string;
+  provider_ids: number[] | null;
+  type: string;
+  context_window: number | null;
+}
+
+export interface ListedPlan extends EconomicPlan, PlanCoverageFields {
+  id: number;
+  name: string;
+  tier: string | null;
+  pricing_model: string;
+  provider_id: number | null;
+  annual_price: number | null;
+  is_official: boolean | null;
+  provider?: PlanProvider | null;
+  models?: PlanModel[];
+  [field: string]: unknown;
+}
+
+export async function getPlans(query: PlanQuery = {}): Promise<ListedPlan[]> {
   const { tier = null, pricingModel = null, providerId = null, includeModels = false } = query;
 
-  const planRows = await sql<any[]>`
+  const planRows = await sql<ListedPlan[]>`
     SELECT * FROM plans
     WHERE (${tier}::text IS NULL OR tier = ${tier})
       AND (${pricingModel}::text IS NULL OR pricing_model = ${pricingModel})
       AND (${providerId}::integer IS NULL OR provider_id = ${providerId})
     ORDER BY tier ASC NULLS LAST, price ASC NULLS LAST
   `;
-  let plans: any[] = [...planRows];
+  let plans = [...planRows];
 
   // Get all provider_ids from plans
-  const providerIds = [...new Set(plans.map((plan: any) => plan.provider_id).filter(Boolean))];
+  const providerIds = [...new Set(plans.map((plan) => plan.provider_id).filter((id): id is number => id != null))];
 
   // Fetch providers
   const providersData = providerIds.length > 0
-    ? await sql<any[]>`
+    ? await sql<PlanProvider[]>`
         SELECT * FROM providers
         WHERE id = ANY(${sql.array(providerIds, INT4_ARRAY)})
       `
@@ -41,12 +75,12 @@ export async function getPlans(query: PlanQuery = {}): Promise<any[]> {
 
   // Include associated models if requested
   if (includeModels) {
-    const planIds = plans.map((p: any) => p.id);
+    const planIds = plans.map((p) => p.id);
 
     // Get models for these plans via model_plan_mapping
     // Schema: model_id, plan_id, priority
     const modelData = planIds.length > 0
-      ? await sql<any[]>`
+      ? await sql<Array<{ plan_id: number; model_id: number; priority: number | null }>>`
           SELECT plan_id, model_id, priority
           FROM model_plan_mapping
           WHERE plan_id = ANY(${sql.array(planIds, INT4_ARRAY)})
@@ -55,9 +89,9 @@ export async function getPlans(query: PlanQuery = {}): Promise<any[]> {
       : [];
 
     // Get unique model IDs and fetch model details
-    const modelIds = [...new Set((modelData || []).map((m: any) => m.model_id).filter(Boolean))];
+    const modelIds = [...new Set(modelData.map((m) => m.model_id))];
     const modelsData = modelIds.length > 0
-      ? await sql<any[]>`
+      ? await sql<PlanModel[]>`
           SELECT id, name, slug, provider_ids, type, context_window
           FROM models
           WHERE id = ANY(${sql.array(modelIds, INT4_ARRAY)})
@@ -67,8 +101,8 @@ export async function getPlans(query: PlanQuery = {}): Promise<any[]> {
     const modelsMap = new Map(modelsData.map(m => [m.id, m]));
 
     // Group models by plan
-    const planModelsMap = new Map();
-    modelData.forEach((m: any) => {
+    const planModelsMap = new Map<number, PlanModel[]>();
+    modelData.forEach((m) => {
       if (!planModelsMap.has(m.plan_id)) {
         planModelsMap.set(m.plan_id, []);
       }
@@ -79,15 +113,15 @@ export async function getPlans(query: PlanQuery = {}): Promise<any[]> {
     });
 
     // Transform data to include models
-    plans = plans.map((plan: any) => ({
+    plans = plans.map((plan) => ({
       ...plan,
       models: planModelsMap.get(plan.id) || [],
     }));
   }
 
   // Transform data to include provider info
-  return plans.map((plan: any) => ({
+  return plans.map((plan) => ({
     ...plan,
-    provider: plan.provider_id ? providerMap.get(plan.provider_id) : null,
+    provider: plan.provider_id ? providerMap.get(plan.provider_id) ?? null : null,
   }));
 }

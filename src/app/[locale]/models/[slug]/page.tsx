@@ -35,11 +35,13 @@ import CodingAgentModelSection from '@/components/coding-agent-model-section';
 import VariantBadges from '@/components/variant-badges';
 import { isArenaBenchmark, type ModelBenchmarkScore } from '@/lib/benchmarks';
 import { getCodingAgentRowsForModel } from '@/lib/coding-agents';
+import { PlanCoverage } from '@/components/plan-coverage';
+import type { PlanCoverageFields } from '@/lib/third-party-coverage';
 
 const baseUrl = SITE_URL;
 
 /** The columns the plan cards read out of the `plans` query below. */
-interface PlanRow {
+interface PlanRow extends PlanCoverageFields {
   id: number;
   name: string;
   slug: string;
@@ -269,6 +271,8 @@ async function getProductWithChannels(slug: string) {
       pl.currency,
       pl.price_unit,
       pl.features,
+      pl.third_party_coverage,
+      pl.third_party_coverage_note,
       pl.access_from_china,
       pl.provider_id,
       pl.plan_kind,
@@ -817,7 +821,9 @@ export default async function ModelPage({
                             <CardTitle className="text-lg">{plan.name}</CardTitle>
                           </div>
                           <div className="mt-2">
-                            {plan.tier === 'free' ? (
+                            {plan.price == null ? (
+                              <div className="text-xl font-bold">{isZh ? '价格未知' : 'Price unknown'}</div>
+                            ) : plan.tier === 'free' ? (
                               <div className="text-3xl font-bold">Free</div>
                             ) : (
                               <>
@@ -858,6 +864,9 @@ export default async function ModelPage({
                         </CardHeader>
 
                         <CardContent>
+                          <div className="mb-3">
+                            <PlanCoverage coverage={plan.third_party_coverage} note={plan.third_party_coverage_note} locale={locale} />
+                          </div>
                           <div className="space-y-2 mb-4">
                             {planFeatures(plan.features).slice(0, 4).map((feature, idx) => (
                               <div key={idx} className="flex items-start gap-2 text-sm">

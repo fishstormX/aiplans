@@ -11,6 +11,7 @@ import { getProviderLogoFallback, getProviderLogoSrc } from '@/lib/provider-bran
 import { groupPlansByKind, normalizePlanKind, type PlanKind } from '@/lib/plan-kinds';
 import { findSubscriptionContext } from '@/lib/subscription-context';
 import { planEconomics, type EconomicPlan, type Quota } from '@/lib/plan-economics';
+import { normalizeThirdPartyCoverage } from '@/lib/third-party-coverage';
 
 /**
  * Builds the plan-comparison payload for one model.
@@ -62,7 +63,8 @@ export async function getPlanComparison(
             qps, tokens_per_minute, features, region, access_from_china,
             payment_methods, is_official, last_verified, provider_id,
             plan_kind, plan_line, tier_rank,
-            quotas, is_contact_sales, pack_validity_days
+            quotas, is_contact_sales, pack_validity_days,
+            third_party_coverage, third_party_coverage_note
           FROM plans
           WHERE id = ANY(${sql.array(planIds, INT4_ARRAY)})
           ORDER BY plan_kind, plan_line NULLS LAST, tier_rank NULLS LAST, price ASC NULLS LAST
@@ -138,6 +140,8 @@ export async function getPlanComparison(
           tierRank: plan.tier_rank ?? null,
           isOfficial,
           features: plan.features || [],
+          thirdPartyCoverage: normalizeThirdPartyCoverage(plan.third_party_coverage),
+          thirdPartyCoverageNote: plan.third_party_coverage_note ?? null,
           subscriptionContext: (() => {
             const fact = findSubscriptionContext([product.slug], plan.plan_line);
             return fact ? {

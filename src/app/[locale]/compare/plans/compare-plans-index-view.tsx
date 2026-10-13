@@ -13,6 +13,7 @@ import { formatPrice, type CurrencyCode } from "@/lib/currency";
 import { matchesSearch } from "@/lib/search-match";
 import type { ComparePlansIndexData, ProviderModelGroup } from "@/lib/compare-plans-index";
 import { formatModelName } from '@/lib/model-names';
+import { PlanCoverage } from '@/components/plan-coverage';
 
 /**
  * The interactive half of /compare/plans: the search box and the sort control.
@@ -276,11 +277,15 @@ export default function ComparePlansIndexView({
                             ? (locale === 'zh' ? '按需报价' : 'Custom')
                             : plan.price === 0
                               ? (locale === 'zh' ? '免费' : 'Free')
-                              : formatPrice(plan.price ?? 0, (plan.currency as CurrencyCode) || 'USD', locale)}
+                              : plan.price == null
+                                ? (locale === 'zh' ? '价格未知' : 'Price unknown')
+                                : formatPrice(plan.price, (plan.currency as CurrencyCode) || 'USD', locale)}
                         </div>
                         <div className="text-sm text-zinc-500">
                           {plan.is_contact_sales
                             ? (locale === 'zh' ? '联系销售' : 'Contact sales')
+                            : plan.price == null
+                              ? (locale === 'zh' ? '待核验' : 'Unverified')
                             : plan.price === 0
                               ? (locale === 'zh' ? '立即体验' : 'Try now')
                               : (plan.price_unit === 'per_month'
@@ -290,6 +295,7 @@ export default function ComparePlansIndexView({
                       </div>
 
                       <div className="space-y-2 mb-4">
+                        <PlanCoverage coverage={plan.third_party_coverage} note={plan.third_party_coverage_note} locale={locale} />
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-zinc-500">{locale === 'zh' ? '包含模型' : 'Models included'}</span>
                           <Badge variant="secondary">{planModels.length}</Badge>

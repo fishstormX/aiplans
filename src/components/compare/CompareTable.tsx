@@ -4,6 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ExternalLink } from "lucide-react";
 import { getProviderVisitRel } from "@/lib/provider-links";
+import { PlanCoverage } from '@/components/plan-coverage';
+import type { ThirdPartyCoverage } from '@/lib/third-party-coverage';
 
 // Helper function to parse numbers with optional commas
 function parseNumberWithCommas(str: string): number | null {
@@ -182,6 +184,8 @@ interface PlanComparison {
     planTier: string;
     isOfficial: boolean;
     features?: string[];
+    thirdPartyCoverage?: ThirdPartyCoverage;
+    thirdPartyCoverageNote?: string | null;
   };
   channel: {
     slug: string;
@@ -622,6 +626,9 @@ function PlanRow({ plan, isBaseline, currency: _currency, showYearly }: {
       </div>
 
       {/* Features */}
+      <div className="mt-3">
+        <PlanCoverage coverage={plan.plan.thirdPartyCoverage} note={plan.plan.thirdPartyCoverageNote} locale="en" />
+      </div>
       {plan.plan.features && plan.plan.features.length > 0 && (
         <div className="mt-4 pt-4 border-t">
           <h5 className="text-sm font-semibold text-zinc-500 mb-2">✨ Features</h5>
