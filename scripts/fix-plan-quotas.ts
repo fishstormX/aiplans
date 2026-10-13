@@ -290,12 +290,27 @@ const ALIYUN_FREE_TRIAL: PlanQuotas[] = [
 const CHATGPT: PlanQuotas[] = [
   {
     slug: 'chatgpt-pro',
-    source: 'https://openai.com/chatgpt/pricing/',
-    quotas: [
-      { unit: 'relative', multiplier: 5, derived_from: 'chatgpt-plus', note: 'page states "5x or 20x more usage" than Plus; lower of the two' },
-      { unit: 'relative', multiplier: 20, derived_from: 'chatgpt-plus', note: 'page states "5x or 20x more usage" than Plus; upper of the two' },
-    ],
-    note: 'Pro is listed as "From $x/month" with "5x or 20x more usage" than Plus; OpenAI does not say which price buys which multiple.',
+    source: 'https://help.openai.com/en/articles/9793128-about-chatgpt-pro-tiers',
+    quotas: [],
+    note: 'Legacy single Pro slug; superseded by chatgpt-pro-100/200/500. OpenAI no longer publishes a single 5x/20x Plus multiple for all Pro.',
+  },
+  {
+    slug: 'chatgpt-pro-100',
+    source: 'https://help.openai.com/en/articles/9793128-about-chatgpt-pro-tiers',
+    quotas: [],
+    note: 'Pro 100 $100/mo; Ultrafast not included; absolute allowance unpublished on Help Center.',
+  },
+  {
+    slug: 'chatgpt-pro-200',
+    source: 'https://help.openai.com/en/articles/9793128-about-chatgpt-pro-tiers',
+    quotas: [],
+    note: 'Pro 200 $200/mo; new subs may have lower allowance; grandfathered allowance through 2026-10-29 for eligible accounts; Ultrafast not included.',
+  },
+  {
+    slug: 'chatgpt-pro-500',
+    source: 'https://help.openai.com/en/articles/9793128-about-chatgpt-pro-tiers',
+    quotas: [],
+    note: 'Pro 500 $500/mo; highest Pro usage; Astra Ultrafast included. Absolute allowance unpublished on Help Center.',
   },
 ];
 
