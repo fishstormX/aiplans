@@ -64,6 +64,11 @@ npx drizzle-kit generate    # emit SQL migrations from schema
 npx drizzle-kit studio      # DB GUI
 ```
 
+ESLint's `eslint-suppressions.json` records the existing `no-explicit-any`
+debt per file. Rules stay enabled: new violations above those counts fail lint.
+When replacing legacy types, run `npx eslint --prune-suppressions` to reduce
+the baseline; do not add suppressions for new code.
+
 ## Technology Stack
 
 - **Frontend**: Next.js 16 (App Router, webpack), TypeScript, TailwindCSS v4,
