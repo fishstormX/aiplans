@@ -1,4 +1,7 @@
-import { pgTable, serial, text, timestamp, boolean, integer, real, jsonb, bigint, bigserial, varchar, numeric, date } from 'drizzle-orm/pg-core';
+import { pgTable, pgEnum, serial, text, timestamp, boolean, integer, real, jsonb, bigint, bigserial, varchar, numeric, date } from 'drizzle-orm/pg-core';
+import { THIRD_PARTY_COVERAGE_VALUES } from '../../lib/third-party-coverage';
+
+export const thirdPartyCoverageEnum = pgEnum('third_party_coverage', THIRD_PARTY_COVERAGE_VALUES);
 
 // Providers - AI service vendors
 export const providers = pgTable('providers', {
@@ -135,6 +138,10 @@ export const plans = pgTable('plans', {
   //      period: 5h|day|week|month|total, derived_from?, multiplier?, note? }]
   // NULL = not researched yet; [] = researched, vendor publishes no number.
   quotas: jsonb('quotas'),
+
+  // Model availability and inclusion in the subscription quota are distinct.
+  thirdPartyCoverage: thirdPartyCoverageEnum('third_party_coverage').notNull().default('unknown'),
+  thirdPartyCoverageNote: text('third_party_coverage_note'),
 
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),

@@ -8,6 +8,13 @@
       "when": 1772124675858,
       "tag": "0000_dry_sumo",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791877002538,
+      "tag": "0001_plan_third_party_coverage",
+      "breakpoints": true
     }
   ]
 }
