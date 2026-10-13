@@ -51,7 +51,7 @@ export default async function PricingGuidePage({
   if (!isPricingGuideSlug(slug)) notFound();
   const locale: Locale = rawLocale === 'zh' ? 'zh' : 'en';
   const guide = PRICING_GUIDES[slug];
-  const models = guide.priceTable === false ? [] : await getPricingGuideModels(guide);
+  const models = await getPricingGuideModels(guide);
   const latestVerified = models
     .map((model) => model.lastVerified)
     .filter(Boolean)
@@ -187,6 +187,28 @@ export default async function PricingGuidePage({
                 </TableBody>
               </Table>
             </div>
+          </section>
+        )}
+
+        {guide.priceTable === false && models.length > 0 && (
+          <section className="py-9" aria-labelledby="related-models">
+            <h2 id="related-models" className="text-2xl font-semibold">
+              {locale === 'zh' ? '相关模型的 API 价格' : 'API prices for related models'}
+            </h2>
+            <p className="mt-3 max-w-3xl leading-7 text-zinc-600 dark:text-zinc-400">
+              {locale === 'zh'
+                ? '第三方模型在新套餐里按 API 价计费，可在模型页对比各渠道价格。'
+                : 'Third-party models are billed at API rates on the new plan; compare channel prices on each model page.'}
+            </p>
+            <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-2">
+              {models.map((model, index) => (
+                <li key={model.slug}>
+                  <Link href={`/${locale}/models/${model.slug}`} data-position={index + 1} className="text-blue-600 hover:underline">
+                    {model.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </section>
         )}
 

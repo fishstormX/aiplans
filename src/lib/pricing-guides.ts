@@ -465,7 +465,8 @@ export const PRICING_GUIDES: Record<PricingGuideSlug, PricingGuide> = {
       zh: '本页比较订阅套餐，不是 token 价目表。The X Subscription 的内含用量池由 Cursor 与 Grok 共享，每周刷新。Premium 及以上可使用 Claude、GPT 等第三方模型，但这些用量不包含在套餐额度中：从首次使用起按 API 标价计费，从预付余额扣款。现有 Cursor 旧套餐的第三方内含用量会持续保留，直到你切换。下表月费不含税，核对日期为 2026-10-13。',
     },
     priceTable: false,
-    queryPatterns: [],
+    // Used for related model links and dateModified only (priceTable: false).
+    queryPatterns: ['%grok%', 'claude-%', 'gpt-%'],
     providerSlugs: ['xai'],
     reviewedAt: '2026-10-13',
     planTable: [
