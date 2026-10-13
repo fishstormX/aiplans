@@ -11,6 +11,7 @@ import { getProviderLogoFallback, getProviderLogoSrc } from '@/lib/provider-bran
 import { groupPlansByKind, normalizePlanKind, type PlanKind } from '@/lib/plan-kinds';
 import { findSubscriptionContext } from '@/lib/subscription-context';
 import { planEconomics, type EconomicPlan, type Quota } from '@/lib/plan-economics';
+import { normalizeThirdPartyCoverage } from '@/lib/third-party-coverage';
 
 /**
  * Builds the plan-comparison payload for one model.
@@ -62,7 +63,8 @@ export async function getPlanComparison(
             qps, tokens_per_minute, features, region, access_from_china,
             payment_methods, is_official, last_verified, provider_id,
             plan_kind, plan_line, tier_rank,
-            quotas, is_contact_sales, pack_validity_days
+            quotas, is_contact_sales, pack_validity_days,
+            third_party_coverage, third_party_coverage_note
           FROM plans
           WHERE id = ANY(${sql.array(planIds, INT4_ARRAY)})
           ORDER BY plan_kind, plan_line NULLS LAST, tier_rank NULLS LAST, price ASC NULLS LAST
@@ -111,118 +113,112 @@ export async function getPlanComparison(
   const economicsFor = (plan: EconomicPlan) =>
     planEconomics(plan, (slug) => economicPlanBySlug.get(slug));
 
-  // Separate official and third-party subscription plans
-  const officialPlans: any[] = [];
-  const thirdPartyPlans: any[] = [];
-
   // Process subscription plans only (not API pricing)
-  if (subscriptionPlans) {
-    subscriptionPlans.forEach((plan: any) => {
-      // Same provider as the product = official, different provider = third-party
-      // product.provider_ids is an array, check if plan's provider is in it
-      const isOfficial = productProvider
-        ? productProvider.id === plan.provider_id
-        : product.provider_ids?.includes(plan.provider_id);
-      const provider = providerMap[plan.provider_id];
-      const yearlyMonthly = getPlanYearlyMonthly(plan);
+  const mappedPlans = subscriptionPlans.map((plan: any) => {
+    // Same provider as the product = official, different provider = third-party
+    // product.provider_ids is an array, check if plan's provider is in it
+    const isOfficial = productProvider
+      ? productProvider.id === plan.provider_id
+      : product.provider_ids?.includes(plan.provider_id);
+    const provider = providerMap[plan.provider_id];
+    const yearlyMonthly = getPlanYearlyMonthly(plan);
 
-      const planData = {
-        plan: {
-          id: plan.id,
-          slug: plan.slug,
-          name: plan.name,
-          nameZh: plan.name,
-          planTier: plan.tier,
-          planKind: normalizePlanKind(plan.plan_kind),
-          planLine: plan.plan_line ?? null,
-          tierRank: plan.tier_rank ?? null,
-          isOfficial,
-          features: plan.features || [],
-          subscriptionContext: (() => {
-            const fact = findSubscriptionContext([product.slug], plan.plan_line);
-            return fact ? {
-              contextWindow: fact.contextWindow,
-              longContextPricing: fact.longContextPricing,
-              surfaces: fact.surfaces,
-              sourceUrl: fact.sourceUrls[0],
-            } : null;
-          })(),
-        },
-        // Locale-free on purpose: currency conversion happens here on the
-        // server, while the client turns this into strings with its own
-        // locale via describeEconomics.
-        economics: economicsFor(plan as EconomicPlan),
-        channel: {
-          slug: provider?.slug || 'unknown',
-          name: provider?.name || 'Unknown',
-          nameZh: provider?.name || 'Unknown',
-          logo: getProviderLogoSrc(provider),
-          logoFallback: getProviderLogoFallback(provider, getProviderLogo(provider?.slug)),
-          website: provider?.website || null,
-          pricingUrl: provider?.pricing_url || null,
-          inviteUrl: provider?.invite_url || null,
-          region: plan.region,
-          accessFromChina: plan.access_from_china,
-          paymentMethods: plan.payment_methods || getPaymentMethods(plan.region),
-        },
-        pricing: {
-          billingModel: plan.pricing_model || 'subscription',
-          billingUnit: plan.price_unit || 'per_month',
-          monthly: plan.price,
-          yearly: plan.annual_price,
-          yearlyMonthly,
-          yearlyDiscountPercent: plan.annual_price && plan.price
-            ? ((1 - (plan.annual_price / 12) / plan.price) * 100)
-            : null,
-          currency: plan.currency || 'USD',
-          displayCurrency: displayCurrency,
-          convertedMonthly: plan.price ? getExchangeRateSync(plan.currency || 'USD', displayCurrency) * plan.price : null,
-          convertedYearly: plan.annual_price ? getExchangeRateSync(plan.currency || 'USD', displayCurrency) * plan.annual_price : null,
-          convertedYearlyMonthly: yearlyMonthly ? convertPrice(yearlyMonthly, plan.currency || 'USD', displayCurrency) : null,
-          exchangeRate: getExchangeRateDisplay(plan.currency || 'USD'),
-          inputPer1m: null,
-          outputPer1m: null,
-          cachedInputPer1m: null,
-          hasOverage: false,
-          overageInputPer1m: null,
-          overageOutputPer1m: null,
-        },
-        limits: {
-          rpm: plan.requests_per_minute,
-          rpd: null,
-          rpm_display: plan.requests_per_minute ? `${plan.requests_per_minute} RPM` : null,
-          tpm: plan.tokens_per_minute,
-          tpd: null,
-          tpm_display: plan.tokens_per_minute ? `${plan.tokens_per_minute.toLocaleString()} TPM` : null,
-          monthlyRequests: null,
-          monthlyTokens: null,
-          maxTokensPerRequest: null,
-          maxInputTokens: null,
-          maxOutputTokens: null,
-        },
-        performance: {
-          qps: plan.qps,
-          concurrentRequests: null,
-          qps_display: plan.qps ? `${plan.qps} QPS` : null,
-        },
-        vsOfficial: {
-          priceDiffPercent: null as number | null,
-          priceDiffLabel: isOfficial ? 'Official Price' : null,
-          rpmDiffPercent: null,
-          qpsDiffPercent: null,
-        },
-        lastVerified: plan.last_verified,
-        sourceUrl: null,
-        note: null,
-      };
+    const planData = {
+      plan: {
+        id: plan.id,
+        slug: plan.slug,
+        name: plan.name,
+        nameZh: plan.name,
+        planTier: plan.tier,
+        planKind: normalizePlanKind(plan.plan_kind),
+        planLine: plan.plan_line ?? null,
+        tierRank: plan.tier_rank ?? null,
+        isOfficial,
+        features: plan.features || [],
+        thirdPartyCoverage: normalizeThirdPartyCoverage(plan.third_party_coverage),
+        thirdPartyCoverageNote: (plan.third_party_coverage_note ?? null) as string | null,
+        subscriptionContext: (() => {
+          const fact = findSubscriptionContext([product.slug], plan.plan_line);
+          return fact ? {
+            contextWindow: fact.contextWindow,
+            longContextPricing: fact.longContextPricing,
+            surfaces: fact.surfaces,
+            sourceUrl: fact.sourceUrls[0],
+          } : null;
+        })(),
+      },
+      // Locale-free on purpose: currency conversion happens here on the
+      // server, while the client turns this into strings with its own
+      // locale via describeEconomics.
+      economics: economicsFor(plan as EconomicPlan),
+      channel: {
+        slug: provider?.slug || 'unknown',
+        name: provider?.name || 'Unknown',
+        nameZh: provider?.name || 'Unknown',
+        logo: getProviderLogoSrc(provider),
+        logoFallback: getProviderLogoFallback(provider, getProviderLogo(provider?.slug)),
+        website: provider?.website || null,
+        pricingUrl: provider?.pricing_url || null,
+        inviteUrl: provider?.invite_url || null,
+        region: plan.region,
+        accessFromChina: plan.access_from_china,
+        paymentMethods: plan.payment_methods || getPaymentMethods(plan.region),
+      },
+      pricing: {
+        billingModel: plan.pricing_model || 'subscription',
+        billingUnit: plan.price_unit || 'per_month',
+        monthly: plan.price,
+        yearly: plan.annual_price,
+        yearlyMonthly,
+        yearlyDiscountPercent: plan.annual_price && plan.price
+          ? ((1 - (plan.annual_price / 12) / plan.price) * 100)
+          : null,
+        currency: plan.currency || 'USD',
+        displayCurrency: displayCurrency,
+        convertedMonthly: plan.price ? getExchangeRateSync(plan.currency || 'USD', displayCurrency) * plan.price : null,
+        convertedYearly: plan.annual_price ? getExchangeRateSync(plan.currency || 'USD', displayCurrency) * plan.annual_price : null,
+        convertedYearlyMonthly: yearlyMonthly ? convertPrice(yearlyMonthly, plan.currency || 'USD', displayCurrency) : null,
+        exchangeRate: getExchangeRateDisplay(plan.currency || 'USD'),
+        inputPer1m: null,
+        outputPer1m: null,
+        cachedInputPer1m: null,
+        hasOverage: false,
+        overageInputPer1m: null,
+        overageOutputPer1m: null,
+      },
+      limits: {
+        rpm: plan.requests_per_minute,
+        rpd: null,
+        rpm_display: plan.requests_per_minute ? `${plan.requests_per_minute} RPM` : null,
+        tpm: plan.tokens_per_minute,
+        tpd: null,
+        tpm_display: plan.tokens_per_minute ? `${plan.tokens_per_minute.toLocaleString()} TPM` : null,
+        monthlyRequests: null,
+        monthlyTokens: null,
+        maxTokensPerRequest: null,
+        maxInputTokens: null,
+        maxOutputTokens: null,
+      },
+      performance: {
+        qps: plan.qps,
+        concurrentRequests: null,
+        qps_display: plan.qps ? `${plan.qps} QPS` : null,
+      },
+      vsOfficial: {
+        priceDiffPercent: null as number | null,
+        priceDiffLabel: isOfficial ? 'Official Price' : null,
+        rpmDiffPercent: null,
+        qpsDiffPercent: null,
+      },
+      lastVerified: plan.last_verified,
+      sourceUrl: null,
+      note: null,
+    };
 
-      if (isOfficial) {
-        officialPlans.push(planData);
-      } else {
-        thirdPartyPlans.push(planData);
-      }
-    });
-  }
+    return planData;
+  });
+  const officialPlans = mappedPlans.filter((entry) => entry.plan.isOfficial);
+  const thirdPartyPlans = mappedPlans.filter((entry) => !entry.plan.isOfficial);
 
   // Build summary for subscription plans only
   const allPlans = [...officialPlans, ...thirdPartyPlans];
@@ -352,8 +348,8 @@ interface ComparablePlan {
   pricing: {
     monthly: number;
     currency: string;
-    convertedMonthly?: number;
-    convertedYearlyMonthly?: number;
+    convertedMonthly?: number | null;
+    convertedYearlyMonthly?: number | null;
   };
 }
 

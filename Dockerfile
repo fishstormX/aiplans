@@ -1,7 +1,7 @@
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 
 FROM node:22-bookworm-slim AS builder
 WORKDIR /app
@@ -16,6 +16,7 @@ FROM deps AS migrator
 WORKDIR /app
 COPY package.json tsconfig.json ./
 COPY scripts ./scripts
+COPY drizzle ./drizzle
 CMD ["npm", "run", "migrate"]
 
 FROM deps AS scraper

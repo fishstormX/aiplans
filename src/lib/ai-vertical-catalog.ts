@@ -141,12 +141,14 @@ export const AI_VERTICAL_CATALOG: AiCatalogItem[] = [
   {
     kind: 'agent',
     name: 'Cursor Background Agents',
-    provider: 'Cursor',
+    provider: 'xAI',
+    providerSlug: 'xai',
     status: 'available',
-    pricing: 'Subscription / usage pool',
-    unit: 'requests, credits, seat',
+    pricing: 'The X Subscription / shared Grok quota; third-party models billed separately',
+    unit: 'shared usage pool, seat',
     capabilities: ['IDE', 'repo context', 'background tasks'],
     bestFor: 'Developers using Cursor as their primary editor.',
+    url: 'https://x.ai/pricing',
   },
   {
     kind: 'agent',

@@ -19,6 +19,7 @@ import {
 import { describeEconomics } from "@/lib/plan-economics";
 import type { PlanComparison } from "@/lib/compare-plans";
 import { PlanRate } from "@/components/plan-rate";
+import { PlanCoverage } from "@/components/plan-coverage";
 import type { FaqItem } from "./faqs";
 import { getProviderVisitRel, getProviderVisitUrl } from "@/lib/provider-links";
 import { formatModelName } from '@/lib/model-names';
@@ -42,7 +43,7 @@ interface CheapestByKind {
   channel: string;
   monthlyPrice: number;
   currency: string;
-  convertedMonthlyPrice?: number;
+  convertedMonthlyPrice?: number | null;
 }
 
 interface PlanGroup {
@@ -400,7 +401,9 @@ export default function ComparePlansView({ locale, data, faqs, couponByProvider 
                                         {formatPrice(plan.pricing.outputPer1m, plan.pricing.currency)}/1M out
                                       </div>
                                     </div>
-                                  ) : price ? (
+                                  ) : price == null ? (
+                                    <div className="text-xl font-bold">{locale === "zh" ? "价格未知" : "Price unknown"}</div>
+                                  ) : price !== 0 ? (
                                     <div className="flex items-baseline gap-1">
                                       <span className="text-2xl font-bold">{formatPrice(price, plan.pricing.currency)}</span>
                                       <span className="text-zinc-500 text-sm">/{showYearly ? "mo" : "mo"}</span>
@@ -467,6 +470,9 @@ export default function ComparePlansView({ locale, data, faqs, couponByProvider 
                                 )}
 
                                 {/* Features - Show more */}
+                                <div className="mb-3">
+                                  <PlanCoverage coverage={plan.plan?.thirdPartyCoverage} note={plan.plan?.thirdPartyCoverageNote} locale={locale} />
+                                </div>
                                 {plan.plan?.subscriptionContext && (
                                   <div className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">
                                     <a href={plan.plan.subscriptionContext.sourceUrl} target="_blank" rel="noopener noreferrer" className="hover:underline">
