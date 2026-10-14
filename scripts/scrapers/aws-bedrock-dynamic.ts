@@ -9,8 +9,8 @@ function price(text: string): number | undefined {
   return match ? Number(match[1]) : undefined;
 }
 
-function canonicalModel(provider: string, raw: string): string | null {
-  if (!/^(Anthropic|Mistral AI?)$/i.test(provider)) return null;
+export function canonicalModel(provider: string, raw: string): string | null {
+  if (!/^(Anthropic|Mistral( AI)?)$/i.test(provider.trim())) return null;
   const clean = raw
     .replace(/\s*\([^)]*\).*$/g, '')
     .replace(/\s+v\d+$/i, '')
@@ -30,6 +30,54 @@ function canonicalModel(provider: string, raw: string): string | null {
   return null;
 }
 
+/**
+ * Two table layouts are supported:
+ * - legacy: one table with Provider / Model Name / ... input / ... output columns;
+ * - current (seen 2026-10-14): one table per provider and region, first header
+ *   cell "<Provider> models", model in column 0. Region tables repeat the same
+ *   provider; the first one on the page is the default region (US East), so
+ *   later tables for an already-seen model are ignored.
+ */
+export function parseBedrockTables(tables: string[][][]): PriceData[] {
+  const prices: PriceData[] = [];
+  const seen = new Set<string>();
+  const push = (modelName: string | null, inputText: string, outputText: string) => {
+    if (!modelName || seen.has(modelName)) return;
+    const input = price(inputText);
+    const output = price(outputText);
+    if (input == null || output == null || input <= 0 || output < input) return;
+    prices.push({
+      modelName,
+      inputPricePer1M: input,
+      outputPricePer1M: output,
+      contextWindow: modelName.startsWith('claude') ? 200_000 : 128_000,
+      isAvailable: true,
+      currency: 'USD',
+    });
+    seen.add(modelName);
+  };
+  for (const rows of tables) {
+    const header = rows[0] ?? [];
+    const inputIndex = header.findIndex(cell => /Price per 1M input tokens$/i.test(cell));
+    const outputIndex = header.findIndex(cell => /Price per 1M output tokens$/i.test(cell));
+    if (inputIndex < 0 || outputIndex < 0) continue;
+    const providerIndex = header.findIndex(cell => /^Provider$/i.test(cell));
+    const modelIndex = header.findIndex(cell => /^Model Name$/i.test(cell));
+    if (providerIndex >= 0 && modelIndex >= 0) {
+      for (const cells of rows.slice(1)) {
+        push(canonicalModel(cells[providerIndex] ?? '', cells[modelIndex] ?? ''), cells[inputIndex] ?? '', cells[outputIndex] ?? '');
+      }
+      continue;
+    }
+    const group = (header[0] ?? '').match(/^(.+?)\s+models$/i);
+    if (!group) continue;
+    for (const cells of rows.slice(1)) {
+      push(canonicalModel(group[1], cells[0] ?? ''), cells[inputIndex] ?? '', cells[outputIndex] ?? '');
+    }
+  }
+  return prices;
+}
+
 class AWSBedrockScraper extends PlaywrightScraper {
   getSourceName(): string { return 'AWS-Bedrock'; }
   getSourceUrl(): string { return AWS_PRICING_URL; }
@@ -45,34 +93,7 @@ class AWSBedrockScraper extends PlaywrightScraper {
       ))
     );
 
-    const prices: PriceData[] = [];
-    const seen = new Set<string>();
-    for (const rows of tables) {
-      const header = rows[0] ?? [];
-      const inputIndex = header.findIndex(cell => /Price per 1M input tokens$/i.test(cell));
-      const outputIndex = header.findIndex(cell => /Price per 1M output tokens$/i.test(cell));
-      const providerIndex = header.findIndex(cell => /^Provider$/i.test(cell));
-      const modelIndex = header.findIndex(cell => /^Model Name$/i.test(cell));
-      if (inputIndex < 0 || outputIndex < 0 || providerIndex < 0 || modelIndex < 0) continue;
-
-      for (const cells of rows.slice(1)) {
-        const modelName = canonicalModel(cells[providerIndex] ?? '', cells[modelIndex] ?? '');
-        if (!modelName || seen.has(modelName)) continue;
-        const input = price(cells[inputIndex] ?? '');
-        const output = price(cells[outputIndex] ?? '');
-        if (input == null || output == null || input <= 0 || output < input) continue;
-
-        prices.push({
-          modelName,
-          inputPricePer1M: input,
-          outputPricePer1M: output,
-          contextWindow: modelName.startsWith('claude') ? 200_000 : 128_000,
-          isAvailable: true,
-          currency: 'USD',
-        });
-        seen.add(modelName);
-      }
-    }
+    const prices = parseBedrockTables(tables);
 
     const errors = prices.length === 0
       ? ['No supported on-demand token prices found in AWS Bedrock pricing tables']

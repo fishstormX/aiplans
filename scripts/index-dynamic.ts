@@ -87,7 +87,9 @@ const API_SCRAPERS: ScraperConfig[] = [
   { name: 'Seed', fn: scrapeSeedDynamic, priority: 1, fullCatalog: true },
 
   // Priority 1 (⭐⭐⭐) - Cloud/HTML-based
-  { name: 'AWS Bedrock', fn: scrapeAWSBedrockDynamic, priority: 1, fullCatalog: true },
+  // Not full-catalog: the 2026-10 page only exposes Mistral token tables statically;
+  // retiring unseen rows would soft-disable every Bedrock Claude price.
+  { name: 'AWS Bedrock', fn: scrapeAWSBedrockDynamic, priority: 1 },
   { name: 'Vertex AI', fn: scrapeVertexAIDynamic, priority: 1, fullCatalog: true },
   { name: 'Azure OpenAI', fn: scrapeAzureOpenAIDynamic, priority: 1 },
   { name: 'Grok', fn: scrapeGrokDynamic, priority: 1, fullCatalog: true },
