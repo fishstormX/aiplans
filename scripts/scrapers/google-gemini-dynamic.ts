@@ -1,15 +1,9 @@
 /** Google Gemini API standard token pricing from the official pricing tables. */
 import type { ScraperResult } from '../utils/validator';
-import { PlaywrightScraper, type PriceData } from './lib/playwright-scraper';
+import { parseGooglePriceCell } from './lib/google-price-parser';
+import { PlaywrightScraper, type PriceData, type ScraperResult as BrowserScraperResult } from './lib/playwright-scraper';
 
-const GOOGLE_PRICING_URL = 'https://ai.google.dev/pricing';
-
-function firstDollar(text: string | undefined): number | undefined {
-  const match = text?.match(/\$\s*([\d.]+)/);
-  if (!match) return undefined;
-  const value = Number(match[1]);
-  return Number.isFinite(value) ? value : undefined;
-}
+const GOOGLE_PRICING_URL = 'https://ai.google.dev/gemini-api/docs/pricing';
 
 function canonicalModel(heading: string): string | null {
   if (!/^Gemini\s+\d/i.test(heading)) return null;
@@ -23,11 +17,51 @@ function canonicalModel(heading: string): string | null {
     .replace(/^-|-$/g, '');
 }
 
+type GooglePrice = ScraperResult['prices'][number] & PriceData;
+type GoogleScraperResult = ScraperResult & BrowserScraperResult;
+
+export interface GooglePricingTable { model: string; tier: string; rows: string[][] }
+
+export function parseGooglePricingTables(tables: GooglePricingTable[], now = new Date()): GooglePrice[] {
+  const prices: GooglePrice[] = [];
+  const seen = new Set<string>();
+  for (const table of tables) {
+    if (table.tier !== 'Standard') continue;
+    const modelName = canonicalModel(table.model);
+    if (!modelName || seen.has(modelName)) continue;
+
+    const inputRow = table.rows.find(row => /^Input price/i.test(row[0] ?? ''));
+    const outputRow = table.rows.find(row => /^Output price/i.test(row[0] ?? ''));
+    const input = parseGooglePriceCell(inputRow?.[2], now);
+    const output = parseGooglePriceCell(outputRow?.[2], now);
+    const cachingRow = table.rows.find(row => /^Context caching price/i.test(row[0] ?? ''));
+    const cached = parseGooglePriceCell(cachingRow?.[2], now);
+    if (input.current == null || output.current == null || input.current <= 0 || output.current < input.current) continue;
+
+    prices.push({
+      modelName,
+      modelSlug: modelName,
+      inputPricePer1M: input.current,
+      outputPricePer1M: output.current,
+      cachedInputPricePer1M: cached.current ?? null,
+      promoEndsAt: input.promoEndsAt,
+      regularInputPricePer1M: input.regular,
+      regularOutputPricePer1M: output.promoEndsAt === input.promoEndsAt ? output.regular : null,
+      regularCachedInputPricePer1M: cached.promoEndsAt === input.promoEndsAt ? cached.regular : null,
+      contextWindow: 1_000_000,
+      isAvailable: true,
+      currency: 'USD',
+    });
+    seen.add(modelName);
+  }
+  return prices;
+}
+
 class GeminiScraper extends PlaywrightScraper {
   getSourceName(): string { return 'Google-Gemini-API'; }
   getSourceUrl(): string { return GOOGLE_PRICING_URL; }
 
-  async scrape(): Promise<ScraperResult> {
+  async scrape(): Promise<GoogleScraperResult> {
     await this.navigate(GOOGLE_PRICING_URL);
     await this.page!.waitForFunction(() =>
       Array.from(document.querySelectorAll('table')).some(table =>
@@ -63,32 +97,7 @@ class GeminiScraper extends PlaywrightScraper {
       console.log(JSON.stringify(tables.slice(0, 5), null, 2));
     }
 
-    const prices: PriceData[] = [];
-    const seen = new Set<string>();
-    for (const table of tables) {
-      if (table.tier !== 'Standard') continue;
-      const modelName = canonicalModel(table.model);
-      if (!modelName || seen.has(modelName)) continue;
-
-      const inputRow = table.rows.find(row => /^Input price/i.test(row[0] ?? ''));
-      const outputRow = table.rows.find(row => /^Output price/i.test(row[0] ?? ''));
-      const input = firstDollar(inputRow?.[2]);
-      const output = firstDollar(outputRow?.[2]);
-      if (process.env.DEBUG_SCRAPER === '1') {
-        console.log({ model: table.model, modelName, input, output });
-      }
-      if (input == null || output == null || input <= 0 || output < input) continue;
-
-      prices.push({
-        modelName,
-        inputPricePer1M: input,
-        outputPricePer1M: output,
-        contextWindow: 1_000_000,
-        isAvailable: true,
-        currency: 'USD',
-      });
-      seen.add(modelName);
-    }
+    const prices = parseGooglePricingTables(tables);
 
     const errors = prices.length === 0
       ? ['No standard text-token prices found in the official Google Gemini pricing tables']
@@ -98,7 +107,8 @@ class GeminiScraper extends PlaywrightScraper {
 }
 
 export async function scrapeGoogleDynamic(): Promise<ScraperResult> {
-  return new GeminiScraper().run();
+  // The browser wrapper preserves this subclass's stricter price/result shape.
+  return new GeminiScraper().run() as Promise<GoogleScraperResult>;
 }
 
 if (require.main === module) {
