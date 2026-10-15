@@ -46,21 +46,25 @@ fi
 set -e
 
 set +e
+# Production writes to plans.model_selector / model_plan_mapping are manual-only
+# (SRE, after user approval). Timers and deploys run read-only previews by
+# default; set PLAN_MAPPINGS_APPLY=1 only for an explicitly approved run.
+# 2026-10-15 17:15 SGT: the API-scraper timer applied an unreviewed selector set.
 if [[ "${SKIP_PLAN_MAPPINGS:-0}" == "1" ]]; then
   echo "SKIP_PLAN_MAPPINGS=1 — skipping plan kind backfill and model↔plan materialization"
   kinds_status=0
   mappings_status=0
-else
-  # Backfill plan_kind / plan_line / tier_rank / model_selector from the curated
-  # classifications. Must precede the materializer, which derives links from
-  # plans.model_selector -- a freshly-scraped plan has none until this runs.
+elif [[ "${PLAN_MAPPINGS_APPLY:-0}" == "1" ]]; then
+  echo "PLAN_MAPPINGS_APPLY=1 — applying plan kinds and model↔plan mappings (approved manual run)"
   "${compose[@]}" run --rm scraper npm run fix:kinds
   kinds_status=$?
-  # Re-derive model↔plan links from each plan's model_selector. Runs after the
-  # plan scrapers so newly-scraped models and plans get linked, and before the
-  # audit so plans.no_model_mapping reflects this run. API-only runs keep this
-  # enabled so newly-discovered models are linked to existing subscription plans.
   "${compose[@]}" run --rm scraper npm run mappings:materialize:apply
+  mappings_status=$?
+else
+  echo "Plan kinds / mappings: dry-run only (set PLAN_MAPPINGS_APPLY=1 for an approved apply)"
+  "${compose[@]}" run --rm scraper npm run fix:kinds:dry-run
+  kinds_status=$?
+  "${compose[@]}" run --rm scraper npm run mappings:materialize:dry-run
   mappings_status=$?
 fi
 
