@@ -56,8 +56,8 @@ test('daily totals count usage once across short/weekly meters; measurements exc
   // (200 fresh*1.25 + 800 cached*.125 + 200 output*10)/1M = .00235.
   assert.equal(first.impliedWindowValueUsd.low, .00235 / 11 * 100);
   assert.equal(first.impliedWindowValueUsd.high, .00235 / 9 * 100);
-  assert.equal(first.placeholderPrices, true);
-  assert.match(first.notes.join(' '), /CONFIG TO FILL/);
+  assert.equal(first.placeholderPrices, false);
+  assert.doesNotMatch(first.notes.join(' '), /CONFIG TO FILL/);
   const anomalies = detectAnomalies(dailyMeasurements(windows));
   assert.equal(anomalies.length, 2); // Independent short and weekly meter comparisons.
   assert.ok(anomalies.every((a) => a.day === '2026-01-02' && a.dropPct === 50));
