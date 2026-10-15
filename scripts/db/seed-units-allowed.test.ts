@@ -6,20 +6,30 @@ import { IMAGE_MODEL_CATALOG } from '../../src/lib/image-model-catalog';
 import { AI_VERTICAL_CATALOG } from '../../src/lib/ai-vertical-catalog';
 import { auditVerticalModelFields, isAuditOwnedVertical } from '../data/catalog-audit-vertical';
 
-// models_pricing_unit_chk as created outside this repo (production, before 035).
-const BASELINE = ['per_1m_tokens', 'per_second', 'per_minute', 'per_generation', 'per_credit', 'per_compute_hour', 'subscription_only', 'unknown'];
+// migrate-data-accuracy replays every migration on each deploy, so 023 re-creates
+// models_pricing_unit_chk before 035/036 run. Its list alone must cover every seed unit
+// and every unit the later migrations add, otherwise existing rows break the re-ADD.
+function replayedModelsList(runner: string): Set<string> {
+  const def = runner.match(/ADD CONSTRAINT models_pricing_unit_chk[\s\S]*?CHECK \(pricing_unit IN \(([^)]*)\)\)/)?.[1];
+  assert.ok(def, '023 models_pricing_unit_chk found');
+  return new Set([...def.matchAll(/'([^']+)'/g)].map(m => m[1]));
+}
 // Unit migrations registered in migrate-data-accuracy.ts; each appends its FOREACH ARRAY[...] values.
 const UNIT_MIGRATIONS = ['0010_allow_per_hour_unit.sql', '0011_allow_per_image_unit.sql'];
 
 function allowedUnits(): Set<string> {
   const runner = readFileSync(new URL('../migrate-data-accuracy.ts', import.meta.url), 'utf8');
-  const allowed = new Set(BASELINE);
+  const allowed = replayedModelsList(runner);
+  const replayed = new Set(allowed);
   for (const file of UNIT_MIGRATIONS) {
     assert.ok(runner.includes(`../drizzle/${file}`), `${file} is registered in migrate-data-accuracy.ts`);
     const sql = readFileSync(new URL(`../../drizzle/${file}`, import.meta.url), 'utf8');
     const list = sql.match(/FOREACH v IN ARRAY ARRAY\[([^\]]+)\]/)?.[1];
     assert.ok(list, `${file} has a FOREACH unit list`);
-    for (const m of list.matchAll(/'([^']+)'/g)) allowed.add(m[1]);
+    for (const m of list.matchAll(/'([^']+)'/g)) {
+      assert.ok(replayed.has(m[1]), `${m[1]} (from ${file}) must also be in 023's replayed models_pricing_unit_chk`);
+      allowed.add(m[1]);
+    }
   }
   return allowed;
 }
