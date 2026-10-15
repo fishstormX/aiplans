@@ -26,8 +26,9 @@ INSERT INTO models (name, slug, type, model_category, context_window, provider_i
 SELECT 'SubQ Snap', 'subq-snap', 'llm', 'text', 384000, ARRAY[id],
        'https://subq.ai/introducing-subq-snap', 'Public Preview; API input $0.05/M, output free.'
 FROM providers WHERE slug = 'subq'
-ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, type = EXCLUDED.type, model_category = EXCLUDED.model_category, context_window = EXCLUDED.context_window,
-  provider_ids = EXCLUDED.provider_ids, offical_link = EXCLUDED.offical_link, description = EXCLUDED.description;
+-- The rollout seed may already own this slug's decision taxonomy, modalities,
+-- capabilities and official references. Reuse its ID and preserve that metadata.
+ON CONFLICT (slug) DO UPDATE SET context_window = EXCLUDED.context_window;
 
 DELETE FROM model_plan_mapping WHERE plan_id IN
   (SELECT p.id FROM plans p JOIN providers pr ON pr.id = p.provider_id WHERE pr.slug = 'subq' AND p.slug = 'subq-snap');

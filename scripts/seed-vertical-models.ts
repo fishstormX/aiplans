@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * Materialize the audited Video / Music / World catalog into models.
+ * Materialize the audited Video / Music / World / Decision catalog into models.
  *
  * This is deliberately narrower than a scraper:
  * - source of truth for public product identity is src/lib/ai-vertical-catalog.ts;
@@ -31,6 +31,8 @@ interface ModelRow {
   id: number;
   slug: string;
   name: string;
+  type: string | null;
+  context_window: number | null;
   provider_ids: number[] | null;
   model_category: string | null;
   input_modalities: string[] | null;
@@ -140,15 +142,14 @@ async function loadExistingModels(slugs: string[]): Promise<Map<string, ModelRow
   if (slugs.length === 0) return new Map();
   const { data, error } = await db
     .from('models')
-    .select('id, slug, name, provider_ids, model_category, input_modalities, output_modalities, capabilities, pricing_unit, description, offical_link, open_source')
+    .select('id, slug, name, type, context_window, provider_ids, model_category, input_modalities, output_modalities, capabilities, pricing_unit, description, offical_link, open_source')
     .in('slug', slugs);
   if (error) throw error;
   return new Map((data ?? []).map((model: ModelRow) => [model.slug, model]));
 }
 
 async function main() {
-  console.log('Video/music/decision rows are owned by npm run seed:catalog-audit (dry-run default); excluded here.');
-  const rows = AI_VERTICAL_CATALOG.filter((item) => RIGOROUS_MODEL_KINDS.includes(item.kind) && !['video-model', 'music-model', 'decision-model'].includes(item.kind));
+  const rows = AI_VERTICAL_CATALOG.filter((item) => RIGOROUS_MODEL_KINDS.includes(item.kind));
   const slugs = rows.map((item) => item.slug).filter(Boolean) as string[];
   const providers = await loadProviders();
   const existingModels = await loadExistingModels(slugs);
@@ -173,9 +174,11 @@ async function main() {
     const payload = {
       name: item.name,
       slug,
-      type: 'multimodal',
+      // A catalog entry can share its slug with an existing token API model.
+      type: existing?.type ?? (item.kind === 'decision-model' ? 'llm' : 'multimodal'),
+      ...(item.contextWindow != null ? { context_window: item.contextWindow } : {}),
       model_category: item.modelCategory,
-      provider_ids: [provider.id],
+      provider_ids: [...new Set([...(existing?.provider_ids ?? []), provider.id])],
       description: description(item),
       offical_link: officialLink(item),
       input_type: item.inputModalities,
@@ -200,6 +203,7 @@ async function main() {
 
     const needsUpdate =
       existing.name !== payload.name ||
+      (item.contextWindow != null && existing.context_window !== item.contextWindow) ||
       existing.model_category !== payload.model_category ||
       existing.pricing_unit !== payload.pricing_unit ||
       existing.offical_link !== payload.offical_link ||

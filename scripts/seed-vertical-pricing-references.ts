@@ -1,11 +1,10 @@
 #!/usr/bin/env tsx
 /**
- * Seed official pricing/plan reference rows for audited Video / Music / World models.
+ * Seed official pricing/plan reference rows for audited Video / Music / World / Decision models.
  *
- * This is not a numeric-price scraper. It creates auditable placeholders with
- * price=NULL where the vendor publishes credit/seconds/generation pricing that
- * still needs source-specific parsing. Detail pages can then show official
- * pricing links and related plan/API entry points without inventing numbers.
+ * Reference plans have price=NULL. Usage prices come only from audited static
+ * video/music/decision values; unknown prices remain NULL. Other units retain
+ * auditable placeholders until source-specific parsing is available.
  */
 import { db } from './db/queries';
 import { AI_VERTICAL_CATALOG, RIGOROUS_MODEL_KINDS, type AiCatalogItem } from '../src/lib/ai-vertical-catalog';
@@ -138,9 +137,15 @@ async function upsertMapping(model: ModelRow, plan: PlanRow) {
     console.log(`    ↳ map ${model.slug} → ${plan.slug}`);
     return;
   }
-  const existing = await db.from('model_plan_mapping').select('id').eq('model_id', model.id).eq('plan_id', plan.id).maybeSingle();
+  const existing = await db.from('model_plan_mapping').select('id, source').eq('model_id', model.id).eq('plan_id', plan.id).maybeSingle();
   if (existing.error) throw existing.error;
-  if (existing.data) return;
+  if (existing.data) {
+    if (APPLY && existing.data.source !== 'manual') {
+      const { error } = await db.from('model_plan_mapping').update({ source: 'manual' }).eq('id', existing.data.id);
+      if (error) throw error;
+    }
+    return;
+  }
   console.log(`    ↳ map ${model.slug} → ${plan.slug}`);
   if (APPLY) {
     const { error } = await db.from('model_plan_mapping').insert({ model_id: model.id, plan_id: plan.id, priority: 50, source: 'manual' });
@@ -148,9 +153,27 @@ async function upsertMapping(model: ModelRow, plan: PlanRow) {
   }
 }
 
-async function upsertUsagePrice(item: AiCatalogItem, model: ModelRow, provider: ProviderRow, plan: PlanRow | null) {
+interface UsageReference { unit: string; priceKind: string; price: number | null }
+
+function usageReferences(item: AiCatalogItem): UsageReference[] {
   const unit = inferPrimaryUnit(item);
-  const priceKind = UNIT_PRICE_KIND[unit];
+  const references: UsageReference[] = [{
+    unit,
+    priceKind: UNIT_PRICE_KIND[unit],
+    price: ['video-model', 'music-model'].includes(item.kind) ? item.pricePerUnit ?? null : null,
+  }];
+  if (item.kind === 'decision-model') {
+    references.push(
+      { unit: 'per_1m_tokens', priceKind: 'input_tokens', price: item.inputPricePer1M ?? null },
+      { unit: 'per_1m_tokens', priceKind: 'output_tokens', price: item.outputPricePer1M ?? null },
+      { unit: 'per_1m_tasks', priceKind: 'tasks', price: item.pricePer1MTasks ?? null },
+    );
+  }
+  return references;
+}
+
+async function upsertUsagePrice(item: AiCatalogItem, model: ModelRow, provider: ProviderRow, plan: PlanRow | null, reference: UsageReference) {
+  const { unit, priceKind, price } = reference;
   const src = sourceUrl(item);
   const existing = await db
     .from('usage_prices')
@@ -168,13 +191,15 @@ async function upsertUsagePrice(item: AiCatalogItem, model: ModelRow, provider: 
     plan_id: plan && plan.id > 0 ? plan.id : null,
     price_kind: priceKind,
     unit,
-    price: null,
-    currency: 'USD',
+    price,
+    currency: item.currency ?? 'USD',
     constraints_json: {
       confidence: item.pricingConfidence,
       pricingUnit: item.pricingUnit,
       publishedPricingText: item.pricing,
-      note: 'Numeric price intentionally null until parsed and verified from source.',
+      ...(item.pricePerUnitHigh == null ? {} : { price_high: item.pricePerUnitHigh }),
+      ...(item.approximatePrice ? { approximate: true } : {}),
+      note: price == null ? 'Numeric price intentionally null until parsed and verified from source.' : 'Numeric price from audited static catalog.',
     },
     source_url: src,
     is_available: item.status !== 'announced' && item.status !== 'discontinued',
@@ -199,8 +224,7 @@ async function upsertUsagePrice(item: AiCatalogItem, model: ModelRow, provider: 
 }
 
 async function main() {
-  console.log('Video/music/decision rows are owned by npm run seed:catalog-audit (dry-run default); excluded here.');
-  const items = AI_VERTICAL_CATALOG.filter((item) => RIGOROUS_MODEL_KINDS.includes(item.kind) && !['video-model', 'music-model', 'decision-model'].includes(item.kind));
+  const items = AI_VERTICAL_CATALOG.filter((item) => RIGOROUS_MODEL_KINDS.includes(item.kind));
   const providers = await loadProviders();
   const models = await loadModels(items.map((item) => item.slug!).filter(Boolean));
 
@@ -219,7 +243,9 @@ async function main() {
 
     const plan = await upsertPlan(item, provider);
     if (plan) await upsertMapping(model, plan);
-    await upsertUsagePrice(item, model, provider, plan);
+    for (const reference of usageReferences(item)) {
+      await upsertUsagePrice(item, model, provider, plan, reference);
+    }
     seeded++;
   }
 
