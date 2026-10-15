@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ProviderLogo } from '@/components/provider-logo';
 import type { Metadata } from "next";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,7 +7,6 @@ import { Building2, ArrowRight, SquarePen } from "lucide-react";
 import { sql } from "@/lib/db";
 import { getActiveCouponMap } from "@/lib/coupons";
 import { CouponBadge } from "@/components/coupon-badge";
-import { getProviderLogoFallback, getProviderLogoSrc } from "@/lib/provider-branding";
 import { buildMetadata, breadcrumbList, jsonLd, SITE_URL, type Locale } from "@/lib/seo";
 import SiteHeader from '@/components/SiteHeader';
 import { buildPlansIndexPricingCopy } from '@/lib/pricing-seo';
@@ -112,17 +112,7 @@ export default async function PlansIndexPage({
                 <Card key={provider.id} className="hover:shadow-lg transition-shadow h-full flex flex-col">
                   <CardContent className="p-6 flex flex-1 flex-col">
                       <div className="flex items-center gap-4 mb-4">
-                        {getProviderLogoSrc(provider) ? (
-                          <img
-                            src={getProviderLogoSrc(provider)!}
-                            alt={provider.name}
-                            className="w-14 h-14 object-contain"
-                          />
-                        ) : (
-                          <div className="w-14 h-14 bg-zinc-100 dark:bg-zinc-800 rounded-lg flex items-center justify-center">
-                            <span className="text-2xl">{getProviderLogoFallback(provider, "🏢")}</span>
-                          </div>
-                        )}
+                        <ProviderLogo provider={provider} size={56} />
                         <div className="flex-1">
                           <h3 className="font-bold text-xl">{provider.name}</h3>
                           {provider.region === 'china' && (
