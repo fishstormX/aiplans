@@ -34,6 +34,7 @@ import {
   type SelectableModel,
 } from '../src/lib/plan-selector';
 import { CLASSIFICATIONS } from './config/plan-classifications';
+import { canonicalJson } from './config/canonical-json';
 
 const DRY_RUN = process.argv.includes('--dry-run');
 
@@ -43,6 +44,12 @@ const DRY_RUN = process.argv.includes('--dry-run');
 const log = (line: string) => console.log(line);
 const applied: string[] = [];
 const skipped: string[] = [];
+// Non-fatal: slugs listed in CLASSIFICATIONS that this DB does not have (legacy
+// or region-specific plans) and plans with no entry (API pricing references,
+// which carry no selector by design). Reported, but do not fail the run.
+const warnings: string[] = [];
+
+
 
 type PlanRow = {
   id: number;
@@ -95,7 +102,22 @@ async function loadCatalog(): Promise<SelectableModel[]> {
 }
 
 function sameSelector(left: ModelSelector | null, right: ModelSelector): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+  return canonicalJson(left) === canonicalJson(right);
+}
+
+async function loadDerivedMappings(): Promise<Map<number, Set<string>>> {
+  const rows = await databaseSql<{ plan_id: number; slug: string }[]>`
+    SELECT mapping.plan_id, model.slug
+      FROM model_plan_mapping AS mapping
+      JOIN models AS model ON model.id = mapping.model_id
+     WHERE mapping.source = 'derived'
+  `;
+  const byPlan = new Map<number, Set<string>>();
+  for (const row of rows) {
+    if (!byPlan.has(row.plan_id)) byPlan.set(row.plan_id, new Set());
+    byPlan.get(row.plan_id)!.add(row.slug);
+  }
+  return byPlan;
 }
 
 async function main() {
@@ -103,6 +125,7 @@ async function main() {
 
   const plans = await loadPlans();
   const catalog = await loadCatalog();
+  const derived = await loadDerivedMappings();
   const byKey = new Map(plans.map((plan) => [`${plan.provider_slug}/${plan.slug}`, plan]));
 
   log(`Loaded ${plans.length} plans and ${catalog.length} models\n`);
@@ -116,7 +139,7 @@ async function main() {
     log(`⚠ ${uncovered.length} plan(s) have no classification entry — add them to CLASSIFICATIONS:`);
     for (const plan of uncovered) log(`    · ${plan.provider_slug}/${plan.slug} (#${plan.id} ${plan.name})`);
     log('');
-    for (const plan of uncovered) skipped.push(`UNCOVERED ${plan.provider_slug}/${plan.slug}`);
+    for (const plan of uncovered) warnings.push(`UNCOVERED ${plan.provider_slug}/${plan.slug}`);
   }
 
   // ─ 2. Apply.
@@ -126,7 +149,7 @@ async function main() {
     const plan = byKey.get(key);
     if (!plan) {
       log(`  ⏭  ${key}: plan not found in DB`);
-      skipped.push(`CLASSIFY ${key}: plan not found`);
+      warnings.push(`CLASSIFY ${key}: plan not found`);
       continue;
     }
 
@@ -137,7 +160,7 @@ async function main() {
       plan.plan_kind === entry.kind &&
       plan.plan_line === entry.line &&
       plan.tier_rank === entry.rank &&
-      JSON.stringify(plan.secondary_kinds ?? []) === JSON.stringify(secondary) &&
+      canonicalJson(plan.secondary_kinds ?? []) === canonicalJson(secondary) &&
       sameSelector(plan.model_selector, entry.selector);
 
     const detail =
@@ -165,6 +188,24 @@ async function main() {
 
     log(`  🔧 ${key}: ${plan.plan_kind ?? 'null'}/${plan.plan_line ?? 'null'}#${plan.tier_rank ?? 'null'} → ${detail}`);
     log(`      reason: ${entry.reason}`);
+    for (const [field, before, after] of [
+      ['plan_kind', plan.plan_kind, entry.kind],
+      ['plan_line', plan.plan_line, entry.line],
+      ['tier_rank', plan.tier_rank, entry.rank],
+      ['secondary_kinds', plan.secondary_kinds ?? [], secondary],
+      ['model_selector', plan.model_selector, entry.selector],
+    ] as const) {
+      if (canonicalJson(before) !== canonicalJson(after)) {
+        log(`      ${field}: ${canonicalJson(before)} → ${canonicalJson(after)}`);
+      }
+    }
+    // What the materializer would then change for this plan's derived links.
+    const current = derived.get(plan.id) ?? new Set<string>();
+    const next = new Set(resolution.models.map((model) => model.slug));
+    const added = [...next].filter((slug) => !current.has(slug)).sort();
+    const removed = [...current].filter((slug) => !next.has(slug)).sort();
+    if (added.length) log(`      mappings +${added.length}: ${added.join(', ')}`);
+    if (removed.length) log(`      mappings −${removed.length}: ${removed.join(', ')}`);
     if (resolution.unusedExclude.length > 0) {
       log(`      note: exclude pattern(s) matched nothing: ${resolution.unusedExclude.join(', ')}`);
     }
@@ -193,14 +234,19 @@ async function main() {
   log(`\n━━━ Summary ━━━`);
   log(`Applied: ${applied.length}`);
   log(`Skipped: ${skipped.length}`);
+  log(`Warnings: ${warnings.length}`);
+  if (warnings.length > 0) {
+    log(`\nWarnings (non-fatal):`);
+    for (const entry of warnings) log(`  - ${entry}`);
+  }
   if (skipped.length > 0) {
     log(`\nSkipped entries:`);
     for (const entry of skipped) log(`  - ${entry}`);
   }
   if (DRY_RUN) log(`\n(dry-run — no changes written)`);
 
-  // Non-zero exit on any skip: a partially-classified table means the
-  // materializer would publish plans with no models.
+  // Non-zero exit on any real skip (0-model selector, unknown extra slug, write
+  // error): the materializer would publish plans with no or wrong models.
   if (skipped.length > 0) process.exitCode = 1;
 }
 
