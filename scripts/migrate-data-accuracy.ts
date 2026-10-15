@@ -927,6 +927,10 @@ const MIGRATIONS: Migration[] = [
     name: '035_allow_per_hour_unit',
     sql: readFileSync(new URL('../drizzle/0010_allow_per_hour_unit.sql', import.meta.url), 'utf8'),
   },
+  {
+    name: '036_allow_per_image_unit',
+    sql: readFileSync(new URL('../drizzle/0011_allow_per_image_unit.sql', import.meta.url), 'utf8'),
+  },
 ];
 
 async function main() {
