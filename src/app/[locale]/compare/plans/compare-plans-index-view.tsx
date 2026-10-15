@@ -1,6 +1,7 @@
 'use client';
 
 import { useDeferredValue, useRef, useState } from 'react';
+import { ProviderLogo } from '@/components/provider-logo';
 import Link from "next/link";
 import { useTranslations } from '@/lib/translations';
 import { Input } from "@/components/ui/input";
@@ -245,15 +246,7 @@ export default function ComparePlansIndexView({
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
-                          {getProviderLogoSrc(plan.provider) ? (
-                            <img
-                              src={getProviderLogoSrc(plan.provider)!}
-                              alt={plan.provider.name}
-                              className="w-8 h-8 object-contain"
-                            />
-                          ) : (
-                            <span className="text-2xl">{getProviderLogoFallback(plan.provider, "🏢")}</span>
-                          )}
+                          <ProviderLogo provider={plan.provider} size={32} />
                           <div>
                             <h3 className="font-bold leading-tight">{plan.name}</h3>
                             <p className="text-sm text-zinc-500">{plan.provider?.name || 'Unknown'}</p>
@@ -487,15 +480,7 @@ function ProviderGroupCard({ locale, group }: { locale: string; group: ProviderM
     <Card className="hover:shadow-lg transition-shadow">
       <CardContent className="p-6">
         <div className="flex items-center gap-3 mb-4">
-          {getProviderLogoSrc(group.provider) ? (
-            <img
-              src={getProviderLogoSrc(group.provider)!}
-              alt={group.provider.name}
-              className="w-12 h-12 object-contain"
-            />
-          ) : (
-            <span className="text-4xl">{getProviderLogoFallback(group.provider, "🏢")}</span>
-          )}
+          <ProviderLogo provider={group.provider} size={48} />
           <div>
             <h3 className="font-bold text-xl">{group.provider.name}</h3>
             <p className="text-sm text-zinc-500">

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import Image from "next/image";
+import { ProviderLogo } from '@/components/provider-logo';
 import { AFFILIATE_LINK_REL, affiliateDisclosureText, resolveOutboundLink } from "@/lib/affiliate-links";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -10,7 +10,6 @@ import { ArrowLeft, CheckCircle2, SquarePen } from "lucide-react";
 import { sql, INT4_ARRAY } from "@/lib/db";
 import { formatPrice, CurrencyCode } from "@/lib/currency";
 import { getAllModelIdsForProvider, getPlanYearlyMonthly } from "@/lib/schema-adapters";
-import { getProviderLogoFallback, getProviderLogoSrc } from "@/lib/provider-branding";
 import { groupPlansByKind, planKindDescription, planKindIcon, planKindLabel } from "@/lib/plan-kinds";
 import { describeEconomics, planEconomics, type EconomicPlan } from "@/lib/plan-economics";
 import { PlanRate } from "@/components/plan-rate";
@@ -221,11 +220,7 @@ export default async function ProviderPage({
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
-              {getProviderLogoSrc(provider) ? (
-                  <Image src={getProviderLogoSrc(provider)!} alt={provider.name} width={64} height={64} className="w-16 h-16 object-contain" unoptimized />
-                ) : (
-                  <span className="text-5xl">{getProviderLogoFallback(provider)}</span>
-                )}
+              <ProviderLogo provider={provider} size={64} />
               <div>
                 <h1 className="text-3xl font-bold">{provider.name}</h1>
                 {provider.description && <p className="mt-2 max-w-3xl text-zinc-600 dark:text-zinc-400">{provider.description}</p>}
